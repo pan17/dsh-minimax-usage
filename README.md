@@ -6,6 +6,29 @@
 `GET /v1/token_plan/remains`，在 Web UI 右下角放一个可拖动的用量气泡。
 密钥复用 DSH **设置 → 模型** 里已配置的订阅 Key，浏览器拿不到明文。
 
+## 安装
+
+未发布到 npm，从 GitHub 安装：
+
+```bash
+dsh plugin --profile web add github:pan17/dsh-minimax-usage
+```
+
+`web` 换成你的 profile 名。装完 **重启 DSH**。
+
+如果 pnpm 提示不允许跑构建脚本，在该 profile 的 `pnpm-workspace.yaml` 加上再重跑同一条命令：
+
+```yaml
+allowBuilds:
+  dsh-minimax-usage: true
+```
+
+然后：
+
+1. 打开 Web UI（默认 `http://127.0.0.1:3080`）
+2. **设置 → 模型** 填写 Token Plan **订阅 Key**（不是普通按量付费 API Key）
+3. 右下角会出现 MiniMax 气泡；悬停看详情，拖动换位置
+
 ## 功能
 
 - **悬浮气泡**：默认在右下角，显示 5 小时窗口剩余百分比；可拖到任意位置，位置会记住
@@ -13,42 +36,6 @@
 - **点击刷新**：点一下气泡强制刷新；拖动不会误触发刷新
 - **密钥来源**：`MINIMAX_API_KEY`（国际）与 `MINIMAX_CN_API_KEY`（国内），优先 `ctx.credentials`，其次进程环境变量
 - **自动刷新**：整轮 Agent 回到空闲且这轮用过 MiniMax 后，再等 15 秒打官方用量。之后心跳从 2 分钟起每次翻倍，上限 24 小时；再用 MiniMax 并空闲后心跳重置回 2 分钟。气泡每 15 秒只读 Host 缓存。点击立即强制刷新。
-
-## 安装
-
-从 GitHub 安装（未发布到 npm）：
-
-```bash
-dsh plugin --profile <profile> add github:pan17/dsh-minimax-usage
-dsh --profile <profile> --dump-config   # 应看到 "- id: dsh-minimax-usage"
-```
-
-指定分支 / 提交：
-
-```bash
-dsh plugin --profile <profile> add github:pan17/dsh-minimax-usage#main
-```
-
-本地开发目录可直接加路径：
-
-```bash
-dsh plugin --profile <profile> add F:\project_pan\dsh-pan-plugin-collection\dsh-minimax-usage
-```
-
-Git 安装会跑 `prepare` 生成 `dist/`。如果 pnpm 拦住构建脚本，把下面加进该 profile 的 `pnpm-workspace.yaml`，再重跑一次：
-
-```yaml
-allowBuilds:
-  dsh-minimax-usage: true
-```
-
-改代码后必须 **重启 DSH** 才会生效。
-
-然后：
-
-1. 打开 DSH Web UI（默认 `http://127.0.0.1:3080`）
-2. **设置 → 模型** 填写 Token Plan **订阅 Key**（不是普通按量付费 API Key）
-3. 重启后页面右下角会出现 MiniMax 气泡；鼠标悬停看详情，拖动可换位置
 
 ## 接口
 
@@ -71,4 +58,10 @@ allowBuilds:
 npm install
 npm test
 npm run build
+```
+
+本地未推送时也可以按路径装：
+
+```bash
+dsh plugin --profile web add /path/to/dsh-minimax-usage
 ```
