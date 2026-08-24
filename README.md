@@ -35,7 +35,12 @@ dsh plugin --profile <profile> add github:pan17/dsh-minimax-usage#main
 dsh plugin --profile <profile> add F:\project_pan\dsh-pan-plugin-collection\dsh-minimax-usage
 ```
 
-如果 pnpm 拦住 `prepare` / `prepublishOnly` 构建脚本，按提示把包名加进该 profile 的 `pnpm-workspace.yaml` 的 `allowBuilds`，再重跑一次。
+Git 安装会跑 `prepare` 生成 `dist/`。如果 pnpm 拦住构建脚本，把下面加进该 profile 的 `pnpm-workspace.yaml`，再重跑一次：
+
+```yaml
+allowBuilds:
+  dsh-minimax-usage: true
+```
 
 改代码后必须 **重启 DSH** 才会生效。
 
