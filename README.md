@@ -16,9 +16,17 @@
 
 ## 安装
 
+从 GitHub 安装（未发布到 npm）：
+
 ```bash
-dsh plugin --profile <profile> add dsh-minimax-usage
+dsh plugin --profile <profile> add github:pan17/dsh-minimax-usage
 dsh --profile <profile> --dump-config   # 应看到 "- id: dsh-minimax-usage"
+```
+
+指定分支 / 提交：
+
+```bash
+dsh plugin --profile <profile> add github:pan17/dsh-minimax-usage#main
 ```
 
 本地开发目录可直接加路径：
@@ -26,6 +34,8 @@ dsh --profile <profile> --dump-config   # 应看到 "- id: dsh-minimax-usage"
 ```bash
 dsh plugin --profile <profile> add F:\project_pan\dsh-pan-plugin-collection\dsh-minimax-usage
 ```
+
+如果 pnpm 拦住 `prepare` / `prepublishOnly` 构建脚本，按提示把包名加进该 profile 的 `pnpm-workspace.yaml` 的 `allowBuilds`，再重跑一次。
 
 改代码后必须 **重启 DSH** 才会生效。
 
