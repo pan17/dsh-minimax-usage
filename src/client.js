@@ -33,7 +33,8 @@ window.__ModuleLoader__.load({
 			".mxu_ring_track{fill:none;stroke:color-mix(in srgb, var(--dsw-alias-label-secondary,#888) 22%, transparent);stroke-width:" + STROKE + "}",
 			".mxu_ring_value{fill:none;stroke:var(--mxu-tone, var(--dsw-alias-brand-primary,#7c8cff));stroke-width:" + STROKE + ";stroke-linecap:round;transition:stroke-dashoffset .5s ease,stroke .3s ease}",
 			".mxu_core{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}",
-			".mxu_pct{font-size:13px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums}",
+			".mxu_pct{font-size:13px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums;display:inline-flex;align-items:baseline;gap:1px}",
+			".mxu_unit{font-size:8px;font-weight:600;opacity:.65;letter-spacing:0;align-self:start;margin-top:1px}",
 			".mxu_tag{font-size:8px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dsw-alias-label-secondary,#8b93a1)}",
 			".mxu_bubble.ok{--mxu-tone:var(--dsw-alias-state-success-primary,#3dbe73)}",
 			".mxu_bubble.warn{--mxu-tone:var(--dsw-alias-state-warn-primary,#e3a008)}",
@@ -357,7 +358,14 @@ window.__ModuleLoader__.load({
 				},
 					createElement(Ring, { percent: failed ? 0 : percent }),
 					createElement("span", { className: "mxu_core" },
-						busy && !primary ? createElement("span", { className: "mxu_spin" }) : createElement("span", { className: "mxu_pct" }, short || "—"),
+						busy && !primary
+							? createElement("span", { className: "mxu_spin" })
+							: short
+								? createElement("span", { className: "mxu_pct" },
+										short,
+										createElement("span", { className: "mxu_unit" }, "%"),
+									)
+								: createElement("span", { className: "mxu_pct" }, "—"),
 						createElement("span", { className: "mxu_tag" }, "5h"),
 					),
 				),
