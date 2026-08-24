@@ -13,8 +13,10 @@
 ### 推荐：从 npm 安装
 
 ```bash
-dsh plugin --profile web add dsh-minimax-usage
+npx @deepseek-ai/dsh plugin --profile web add dsh-minimax-usage
 ```
+
+> ⚠️ **别用** `npx dsh plugin`——npm 上 `dsh` 这个名字早在 2016 年就被一个不相关的 JS shell 包占了（`dsh@1.0.1`，作者 `infusion`），它没暴露 CLI bin，会报 `could not determine executable to run`。DSH 的 CLI 在 scoped 包 `@deepseek-ai/dsh` 下，必须用完整名。
 
 `web` 换成你的 profile 名。装完 **重启 DSH**。
 
@@ -23,13 +25,13 @@ dsh plugin --profile web add dsh-minimax-usage
 锁定版本：
 
 ```bash
-dsh plugin --profile web add github:pan17/dsh-minimax-usage#v0.1.2
+npx @deepseek-ai/dsh plugin --profile web add github:pan17/dsh-minimax-usage#v0.1.2
 ```
 
 或默认分支最新：
 
 ```bash
-dsh plugin --profile web add github:pan17/dsh-minimax-usage
+npx @deepseek-ai/dsh plugin --profile web add github:pan17/dsh-minimax-usage
 ```
 
 ### 构建脚本授权
@@ -85,5 +87,5 @@ npm run build
 本地未推送时也可以按路径装：
 
 ```bash
-dsh plugin --profile web add /path/to/dsh-minimax-usage
+npx @deepseek-ai/dsh plugin --profile web add /path/to/dsh-minimax-usage
 ```
