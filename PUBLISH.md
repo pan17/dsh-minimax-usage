@@ -98,17 +98,3 @@ git push origin main --tags
 > **前置条件**：在仓库 Settings → Secrets and variables → Actions 中配置 `NPM` secret，值为 npm 的 Automation Token（`npm token create --type automation` 生成）。
 
 ---
-
-## 本地构建与测试
-
-```bash
-npm ci          # 安装依赖（lockfile 精确版本）
-npm run build   # tsc → dist/ + client bundle
-npm test        # vitest 全部用例
-```
-
-发布前可本地验证产物：
-
-```bash
-npm pack --dry-run   # 查看将发布的文件清单（dist/、README、LICENSE、cordis.patch.yml 等）
-```
