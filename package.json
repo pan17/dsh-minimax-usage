@@ -5,6 +5,7 @@
   "type": "module",
   "files": [
     "dist/",
+    "assets/",
     "cordis.patch.yml",
     "README.md",
     "LICENSE",

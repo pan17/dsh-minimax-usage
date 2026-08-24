@@ -6,6 +6,8 @@
 `GET /v1/token_plan/remains`，在 Web UI 右下角放一个可拖动的用量气泡。
 密钥复用 DSH **设置 → 模型** 里已配置的订阅 Key，浏览器拿不到明文。
 
+![dsh-minimax-usage 悬浮气泡](assets/screenshot.png)
+
 ## 安装
 
 ### 推荐：从 npm 安装
