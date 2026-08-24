@@ -8,15 +8,31 @@
 
 ## 安装
 
-未发布到 npm，从 GitHub 安装：
+### 推荐：从 npm 安装
+
+```bash
+dsh plugin --profile web add dsh-minimax-usage
+```
+
+`web` 换成你的 profile 名。装完 **重启 DSH**。
+
+### 备选：从 GitHub 装
+
+锁定版本：
+
+```bash
+dsh plugin --profile web add github:pan17/dsh-minimax-usage#v0.1.2
+```
+
+或默认分支最新：
 
 ```bash
 dsh plugin --profile web add github:pan17/dsh-minimax-usage
 ```
 
-`web` 换成你的 profile 名。装完 **重启 DSH**。
+### 构建脚本授权
 
-如果 pnpm 提示不允许跑构建脚本，在该 profile 的 `pnpm-workspace.yaml` 加上再重跑同一条命令：
+如果 pnpm 提示不允许跑构建脚本（`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`），在该 profile 的 `pnpm-workspace.yaml` 加上再重跑同一条命令：
 
 ```yaml
 allowBuilds:
@@ -51,6 +67,10 @@ allowBuilds:
 - 订阅 Key 与普通开放平台 API Key **不能混用**。用量接口拒绝普通 Key 时，页面会提示改用订阅 Key。
 - 插件原样展示官方剩余额度，不本地「修正」扣费；`remains_time` 的语义以 MiniMax 控制台为准。
 - `*_quota = 0` 的模型会标成「未包含」，而不是 0%。
+
+## 发布
+
+参见 [PUBLISH.md](./PUBLISH.md)：tag push 触发 GitHub Actions，自动 pack → GitHub Release → 等 CI 绿 → publish 到 npm。
 
 ## 开发
 
