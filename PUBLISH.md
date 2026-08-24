@@ -71,21 +71,15 @@ git push origin main --tags
 ```
 
 > **注意**：`git push` 的"同步"按钮**不会推送 tags**，必须单独执行 `git push origin --tags` 或 `git push origin v0.1.1`。
->
-> **如果 CI 已通过但 workflow 还跑着旧的 tag 指向**：删了重打指向最新 commit：
-> ```bash
-> git tag -d v0.1.1 && git push origin :refs/tags/v0.1.1
-> git tag v0.1.1 && git push origin v0.1.1
-> ```
 
 ### 4. 自动构建与发布
 
 推送 tag 后，GitHub Actions 会自动触发 `.github/workflows/release.yml`，依次执行：
 
-1. **`release`** — 安装依赖 → `npm pack` → 从 CHANGELOG.md 抓 notes → 创建 GitHub Release（带 tarball）
-2. **`publish-npm`** — 等 CI 绿后 → 安装依赖 → 构建 → 测试 → 发布到 npm（用 `GITHUBAUTO` secret 认证；`prepublishOnly` 已内置 build + test 双保险）
+1. **`publish-npm`** — 安装依赖 → 构建 → 测试 → 发布到 npm（使用 `NPM` secret 认证；`prepublishOnly` 已内置 build + test 双保险）
+2. **`release`** — npm 发布成功后，自动创建带 Release Notes 的 GitHub Release
 
-> **前置条件**：在仓库 Settings → Secrets and variables → Actions 中配置 `GITHUBAUTO` secret，值为 npm 的 Automation Token（`npm token create --type automation` 生成）。
+> **前置条件**：在仓库 Settings → Secrets and variables → Actions 中配置 `NPM` secret，值为 npm 的 Automation Token（`npm token create --type automation` 生成）。
 
 ---
 
