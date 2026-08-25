@@ -33,6 +33,13 @@ export interface UsageSnapshot {
   error?: string;
   reason?: RefreshReason;
   heartbeatMs?: number;
+  /**
+   * "init" while the plugin is still warming credentials after start; the
+   * client renders a loading state instead of treating the empty accounts
+   * list as an unconfigured error. Absent (or "ready") means the snapshot
+   * reflects a real fetch.
+   */
+  phase?: "init" | "ready";
   accounts: AccountSnapshot[];
 }
 

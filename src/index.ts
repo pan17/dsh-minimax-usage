@@ -27,6 +27,15 @@ export function apply(ctx: unknown): () => void {
     },
   });
 
+  // Resolve the first usable snapshot before any /status request lands so the
+  // Web UI never flashes the "unconfigured" error during the brief window in
+  // which `dsh-credentials-local` is still loading `.credentials.yaml`.
+  // Runs concurrently with the event subscriptions and route registration
+  // below; the .catch guarantees the service can never get stuck in "init".
+  void service.prewarm().catch(() => {
+    service.markReady();
+  });
+
   if (typeof context.on === "function") {
     context.on("llm/stream", (options, next) => {
       const provider =

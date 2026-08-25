@@ -283,13 +283,14 @@ window.__ModuleLoader__.load({
 			const primary = pickPrimaryModel(accounts);
 			const percent = primary && primary.model ? primary.model.intervalRemainingPercent : undefined;
 			const accountError = (accounts.find((a) => a && a.error) || {}).error;
-			const failed = !!(data && (data.error || accountError) && !accounts.some((a) => a && a.ok));
+			const isLoading = data && data.phase === "init";
+			const failed = !isLoading && !!(data && (data.error || accountError) && !accounts.some((a) => a && a.ok));
 			const tone = failed ? "danger" : toneOf(percent);
 			const short = primary ? String(Math.round(percent)) : (failed ? "!" : "");
 			const title = primary
 				? ("MiniMax 5h 剩余 " + formatPercent(percent))
-				: (data && data.error ? data.error : (accountError || "MiniMax 未配置"));
-			const liveLabel = failed ? "异常" : (busy ? "刷新中" : "自动刷新");
+				: (isLoading ? "MiniMax 加载中" : (data && data.error ? data.error : (accountError || "MiniMax 未配置")));
+			const liveLabel = isLoading ? "加载中" : (failed ? "异常" : (busy ? "刷新中" : "自动刷新"));
 
 			const panelLeft = pos.left > (typeof window === "undefined" ? 600 : window.innerWidth / 2);
 			const panelTop = pos.top > (typeof window === "undefined" ? 400 : window.innerHeight / 2);
@@ -382,7 +383,7 @@ window.__ModuleLoader__.load({
 					),
 					data && data.error ? createElement("div", { className: "mxu_err" }, data.error) : null,
 					accounts.length === 0 && !(data && data.error)
-						? createElement("div", { className: "mxu_sub" }, "正在读取用量…")
+						? createElement("div", { className: "mxu_sub" }, isLoading ? "加载中…" : "正在读取用量…")
 						: null,
 					accounts.map((account) => createElement("div", { className: "mxu_acc", key: account.region },
 						createElement("div", { className: "mxu_acc_head" },
