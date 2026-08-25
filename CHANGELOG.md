@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-25
+
+### Added
+
+- 每轮快照根据 5 小时窗口的 `intervalEndAt`，在重置时刻 + 30 秒自动再刷一次，及时捕获窗口翻页后的新额度（`interval-reset` reason）
+
 ## [0.1.2] - 2026-08-24
 
 ### Added

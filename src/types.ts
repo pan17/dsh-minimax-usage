@@ -25,7 +25,13 @@ export interface AccountSnapshot {
   models: UsageModel[];
 }
 
-export type RefreshReason = "startup" | "turn-idle" | "heartbeat" | "credential" | "manual";
+export type RefreshReason =
+  | "startup"
+  | "turn-idle"
+  | "heartbeat"
+  | "credential"
+  | "manual"
+  | "interval-reset";
 
 /** Browser-facing usage payload. Never contains secrets or Host objects. */
 export interface UsageSnapshot {
