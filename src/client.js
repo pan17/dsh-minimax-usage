@@ -17,60 +17,143 @@ window.__ModuleLoader__.load({
 		const inject = ["slots"];
 		const POLL_MS = 15000;
 		const POS_KEY = "dsh-minimax-usage.pos";
-		const BUBBLE = 58;
-		const RING = 52;
-		const STROKE = 3.5;
+		const BUBBLE = 64;
+		const RING = 56;
+		const STROKE = 4;
 		const RADIUS = (RING - STROKE) / 2;
 		const CIRCUM = 2 * Math.PI * RADIUS;
-		const MARGIN = 16;
+		const MARGIN = 14;
+		const GRAD_ID = "mxu-ring-grad";
 
 		const css = [
-			".mxu_float{pointer-events:auto;position:absolute;z-index:30;width:" + BUBBLE + "px;height:" + BUBBLE + "px}",
-			".mxu_bubble{appearance:none;width:" + BUBBLE + "px;height:" + BUBBLE + "px;padding:0;border:0;border-radius:50%;background:color-mix(in srgb, var(--dsw-alias-bg-overlay, #16181d) 86%, transparent);color:var(--dsw-alias-label-primary,#e8eaed);box-shadow:0 10px 28px rgba(0,0,0,.22),0 0 0 1px color-mix(in srgb, var(--dsw-alias-border-l1,#fff) 55%, transparent),inset 0 1px 0 rgba(255,255,255,.08);backdrop-filter:blur(18px) saturate(1.2);-webkit-backdrop-filter:blur(18px) saturate(1.2);cursor:grab;display:grid;place-items:center;user-select:none;touch-action:none;transition:transform .18s ease,box-shadow .18s ease}",
-			".mxu_bubble:hover{transform:scale(1.05);box-shadow:0 14px 34px rgba(0,0,0,.28),0 0 0 1px color-mix(in srgb, var(--dsw-alias-brand-primary,#7c8cff) 35%, transparent),inset 0 1px 0 rgba(255,255,255,.1)}",
-			".mxu_float[data-dragging=true] .mxu_bubble{cursor:grabbing;transform:scale(1.08);transition:none}",
-			".mxu_ring{position:absolute;inset:3px;width:" + RING + "px;height:" + RING + "px;transform:rotate(-90deg)}",
-			".mxu_ring_track{fill:none;stroke:color-mix(in srgb, var(--dsw-alias-label-secondary,#888) 22%, transparent);stroke-width:" + STROKE + "}",
-			".mxu_ring_value{fill:none;stroke:var(--mxu-tone, var(--dsw-alias-brand-primary,#7c8cff));stroke-width:" + STROKE + ";stroke-linecap:round;transition:stroke-dashoffset .5s ease,stroke .3s ease}",
-			".mxu_core{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}",
-			".mxu_pct{font-size:13px;font-weight:650;letter-spacing:-.03em;font-variant-numeric:tabular-nums;display:inline-flex;align-items:baseline;gap:1px}",
-			".mxu_unit{font-size:8px;font-weight:600;opacity:.65;letter-spacing:0;align-self:start;margin-top:1px}",
-			".mxu_tag{font-size:8px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--dsw-alias-label-secondary,#8b93a1)}",
-			".mxu_bubble.ok{--mxu-tone:var(--dsw-alias-state-success-primary,#3dbe73)}",
-			".mxu_bubble.warn{--mxu-tone:var(--dsw-alias-state-warn-primary,#e3a008)}",
-			".mxu_bubble.danger{--mxu-tone:var(--dsw-alias-state-error-primary,#ef5b5b)}",
-			".mxu_bubble.muted{--mxu-tone:var(--dsw-alias-label-secondary,#8b93a1)}",
-			".mxu_spin{width:14px;height:14px;border:1.5px solid color-mix(in srgb, var(--dsw-alias-label-secondary,#888) 35%, transparent);border-top-color:var(--dsw-alias-brand-primary,#7c8cff);border-radius:50%;animation:mxu_spin .7s linear infinite}",
+			// === root + draggable wrapper ===
+			".mxu_float{pointer-events:auto;position:absolute;z-index:30;width:" + BUBBLE + "px;height:" + BUBBLE + "px;animation:mxu_in .28s cubic-bezier(.2,.9,.3,1.2)}",
+			"@keyframes mxu_in{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}",
+
+			// === bubble shell ===
+			".mxu_bubble{position:relative;width:" + BUBBLE + "px;height:" + BUBBLE + "px;padding:0;border:0;border-radius:50%;cursor:grab;display:grid;place-items:center;user-select:none;touch-action:none;isolation:isolate;",
+			// radial gradient: tone-tinted highlight at top-left, deep bg at bottom-right
+			"background:radial-gradient(120% 120% at 28% 22%,color-mix(in srgb,var(--mxu-tone) 16%,var(--dsw-alias-bg-overlay,#16181d)) 0%,var(--dsw-alias-bg-overlay,#16181d) 58%,color-mix(in srgb,#000 28%,var(--dsw-alias-bg-overlay,#16181d)) 100%);",
+			// layered shadow: drop + tone glow + 1px rim + top sheen + bottom shade
+			"box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 28px -4px color-mix(in srgb,var(--mxu-tone) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18);",
+			"backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);",
+			// subtle inner noise overlay for premium texture
+			"transition:transform .22s cubic-bezier(.2,.9,.3,1.2),box-shadow .22s ease}",
+			// top sheen pseudo-element (cleaner than nested divs)
+			".mxu_bubble::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(160deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 38%);pointer-events:none;mix-blend-mode:screen}",
+			// micro inner ring under the SVG ring for crisp edge
+			".mxu_bubble::after{content:\"\";position:absolute;inset:2px;border-radius:inherit;border:1px solid rgba(255,255,255,.05);mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);mask-composite:exclude;-webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;pointer-events:none}",
+
+			// === hover / drag / focus ===
+			".mxu_bubble:hover{transform:scale(1.06);box-shadow:0 18px 44px rgba(0,0,0,.36),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 32%,transparent),0 0 36px -2px color-mix(in srgb,var(--mxu-tone) 60%,transparent),inset 0 1px 0 rgba(255,255,255,.14)}",
+			".mxu_bubble:active{cursor:grabbing}",
+			".mxu_float[data-dragging=true] .mxu_bubble{cursor:grabbing;transform:scale(1.10);transition:none;box-shadow:0 22px 52px rgba(0,0,0,.42),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 38%,transparent),0 0 44px color-mix(in srgb,var(--mxu-tone) 55%,transparent)}",
+
+			// === ring (SVG) ===
+			".mxu_ring{position:absolute;inset:4px;width:" + RING + "px;height:" + RING + "px;transform:rotate(-90deg);overflow:visible}",
+			".mxu_ring_track{fill:none;stroke:color-mix(in srgb,var(--mxu-tone) 18%,transparent);stroke-width:" + STROKE + "}",
+			".mxu_ring_value{fill:none;stroke:url(#" + GRAD_ID + ");stroke-width:" + STROKE + ";stroke-linecap:round;",
+			"transition:stroke-dashoffset .55s cubic-bezier(.3,.7,.4,1),stroke .3s ease;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--mxu-tone) 55%,transparent))}",
+
+			// === core (center content) ===
+			".mxu_core{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1}",
+			".mxu_pct{font-size:14px;font-weight:700;letter-spacing:-.045em;font-variant-numeric:tabular-nums;display:inline-flex;align-items:baseline;color:var(--dsw-alias-label-primary,#f4f6f9)}",
+			".mxu_pct em{font-style:normal;font-size:8.5px;font-weight:600;opacity:.62;margin-left:1px;align-self:flex-start;margin-top:1.5px}",
+			".mxu_pct_dash{font-size:16px;font-weight:700;opacity:.7;letter-spacing:0}",
+			".mxu_pct_err{font-size:18px;font-weight:800;line-height:1;color:var(--dsw-alias-state-error-primary,#ef5b5b);filter:drop-shadow(0 0 6px color-mix(in srgb,var(--dsw-alias-state-error-primary,#ef5b5b) 50%,transparent))}",
+			".mxu_tag{display:inline-flex;align-items:center;gap:3px;margin-top:2px;font-size:8.5px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 90%,transparent)}",
+			".mxu_tag::before{content:\"\";width:4px;height:4px;border-radius:50%;background:var(--mxu-tone);box-shadow:0 0 6px var(--mxu-tone);opacity:.85}",
+
+			// === tones (bubble + bar + dot share these) ===
+			".mxu_bubble.ok{--mxu-tone:#10b981;--mxu-tone-2:#34d399;--mxu-tone-soft:rgba(16,185,129,.12)}",
+			".mxu_bubble.warn{--mxu-tone:#f59e0b;--mxu-tone-2:#fbbf24;--mxu-tone-soft:rgba(245,158,11,.12)}",
+			".mxu_bubble.danger{--mxu-tone:#f43f5e;--mxu-tone-2:#fb7185;--mxu-tone-soft:rgba(244,63,94,.12)}",
+			".mxu_bubble.muted{--mxu-tone:#64748b;--mxu-tone-2:#94a3b8;--mxu-tone-soft:rgba(100,116,139,.12)}",
+			".mxu_bubble.loading{--mxu-tone:#7c8cff;--mxu-tone-2:#a5b4fc;--mxu-tone-soft:rgba(124,140,255,.12);animation:mxu_pulse 2s ease-in-out infinite}",
+			"@keyframes mxu_pulse{0%,100%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 28px -4px color-mix(in srgb,var(--mxu-tone) 35%,transparent)}50%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 35%,transparent),0 0 44px 4px color-mix(in srgb,var(--mxu-tone) 55%,transparent)}}",
+
+			// === spinner (loading) ===
+			".mxu_spin{width:18px;height:18px;border-radius:50%;position:relative}",
+			".mxu_spin::before,.mxu_spin::after{content:\"\";position:absolute;inset:0;border-radius:50%;border:2px solid transparent}",
+			".mxu_spin::before{border-top-color:var(--mxu-tone);border-right-color:color-mix(in srgb,var(--mxu-tone) 60%,transparent);animation:mxu_spin .9s cubic-bezier(.5,.1,.5,.9) infinite}",
+			".mxu_spin::after{border:1px solid color-mix(in srgb,var(--mxu-tone) 20%,transparent);inset:-3px}",
 			"@keyframes mxu_spin{to{transform:rotate(360deg)}}",
-			".mxu_panel{pointer-events:none;position:absolute;width:276px;padding:12px 13px 11px;border-radius:16px;background:color-mix(in srgb, var(--dsw-alias-bg-overlay,#16181d) 92%, transparent);color:var(--dsw-alias-label-primary,#e8eaed);border:1px solid color-mix(in srgb, var(--dsw-alias-border-l1,#fff) 65%, transparent);box-shadow:0 18px 48px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,255,255,.06);backdrop-filter:blur(22px) saturate(1.25);-webkit-backdrop-filter:blur(22px) saturate(1.25);opacity:0;transform:translateY(6px) scale(.98);transform-origin:bottom right;transition:opacity .16s ease,transform .16s ease}",
+
+			// === panel (hover detail) ===
+			".mxu_panel{pointer-events:none;position:absolute;width:296px;padding:14px 15px 12px;border-radius:18px;",
+			"background:linear-gradient(180deg,color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 94%,transparent),color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 88%,transparent));",
+			"color:var(--dsw-alias-label-primary,#e8eaed);",
+			// gradient border via mask-composite
+			"border:1px solid transparent;",
+			"background-clip:padding-box;",
+			"box-shadow:0 24px 64px rgba(0,0,0,.42),0 1px 0 rgba(255,255,255,.04) inset;",
+			"backdrop-filter:blur(28px) saturate(1.35);-webkit-backdrop-filter:blur(28px) saturate(1.35);",
+			"opacity:0;transform:translateY(8px) scale(.96);transform-origin:bottom right;",
+			"transition:opacity .18s cubic-bezier(.2,.9,.3,1.1),transform .18s cubic-bezier(.2,.9,.3,1.1);",
+			// pseudo border for gradient effect
+			"}",
+			".mxu_panel::before{content:\"\";position:absolute;inset:0;border-radius:inherit;padding:1px;background:linear-gradient(140deg,color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 50%,transparent),color-mix(in srgb,var(--mxu-tone,#7c8cff) 28%,transparent) 50%,color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 18%,transparent));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.85}",
 			".mxu_float:hover .mxu_panel,.mxu_float:focus-within .mxu_panel{opacity:1;transform:none}",
 			".mxu_float[data-dragging=true] .mxu_panel{opacity:0;pointer-events:none}",
-			".mxu_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px}",
-			".mxu_brand{display:flex;flex-direction:column;gap:2px}",
-			".mxu_title{font-size:13px;font-weight:650;letter-spacing:-.01em}",
-			".mxu_sub{font-size:11px;color:var(--dsw-alias-label-secondary,#8b93a1)}",
-			".mxu_live{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--dsw-alias-label-secondary,#8b93a1);white-space:nowrap}",
-			".mxu_dot{width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-success-primary,#3dbe73);box-shadow:0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-success-primary,#3dbe73) 22%, transparent)}",
-			".mxu_dot.warn{background:var(--dsw-alias-state-warn-primary,#e3a008);box-shadow:0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-warn-primary,#e3a008) 22%, transparent)}",
-			".mxu_dot.danger{background:var(--dsw-alias-state-error-primary,#ef5b5b);box-shadow:0 0 0 3px color-mix(in srgb, var(--dsw-alias-state-error-primary,#ef5b5b) 22%, transparent)}",
-			".mxu_err{color:var(--dsw-alias-state-error-primary,#ef5b5b);font-size:11px;line-height:1.45;margin:2px 0 8px}",
-			".mxu_acc{padding:9px 0 2px;border-top:1px solid color-mix(in srgb, var(--dsw-alias-border-l1,#fff) 55%, transparent)}",
-			".mxu_acc:first-of-type{border-top:none;padding-top:0}",
+
+			// === header ===
+			".mxu_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:11px}",
+			".mxu_brand{display:flex;align-items:center;gap:8px}",
+			".mxu_logo{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--mxu-tone,#7c8cff),color-mix(in srgb,var(--mxu-tone,#7c8cff) 50%,#fff));display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;box-shadow:0 4px 10px color-mix(in srgb,var(--mxu-tone,#7c8cff) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.3)}",
+			".mxu_title{font-size:13px;font-weight:700;letter-spacing:-.015em}",
+			".mxu_sub{font-size:10.5px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent);margin-top:1px}",
+			".mxu_live{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:550;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent);white-space:nowrap;padding-top:2px}",
+			".mxu_dot{width:7px;height:7px;border-radius:50%;background:var(--mxu-tone);box-shadow:0 0 0 3px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 8px var(--mxu-tone);animation:mxu_blink 2.4s ease-in-out infinite}",
+			".mxu_dot.warn{background:var(--dsw-alias-state-warn-primary,#f59e0b);box-shadow:0 0 0 3px color-mix(in srgb,#f59e0b 18%,transparent),0 0 8px #f59e0b}",
+			".mxu_dot.danger{background:#f43f5e;box-shadow:0 0 0 3px color-mix(in srgb,#f43f5e 18%,transparent),0 0 8px #f43f5e}",
+			"@keyframes mxu_blink{0%,100%{opacity:1}50%{opacity:.55}}",
+
+			// === error / empty ===
+			".mxu_err{display:flex;gap:6px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,#f43f5e 12%,transparent);border:1px solid color-mix(in srgb,#f43f5e 22%,transparent);color:#fda4af;font-size:11px;line-height:1.5;margin:0 0 10px}",
+			".mxu_err::before{content:\"⚠\";font-size:11px;line-height:1;margin-top:1px;flex:none}",
+			".mxu_empty{padding:18px 4px;text-align:center;font-size:11px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent)}",
+			".mxu_empty .mxu_spin{display:inline-block;margin-bottom:8px}",
+
+			// === account card ===
+			".mxu_acc{position:relative;padding:9px 11px 10px 14px;margin-top:8px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 50%,transparent);",
+			"border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 8%,transparent);transition:background .18s ease,border-color .18s ease}",
+			".mxu_acc:first-of-type{margin-top:0}",
+			".mxu_acc:hover{background:color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 70%,transparent);border-color:color-mix(in srgb,var(--mxu-tone,#7c8cff) 22%,transparent)}",
+			// left accent stripe
+			".mxu_acc::before{content:\"\";position:absolute;left:4px;top:10px;bottom:10px;width:2.5px;border-radius:2px;background:linear-gradient(180deg,var(--mxu-tone,#7c8cff),color-mix(in srgb,var(--mxu-tone,#7c8cff) 30%,transparent));box-shadow:0 0 8px color-mix(in srgb,var(--mxu-tone,#7c8cff) 50%,transparent)}",
+			".mxu_acc.ok{--mxu-tone:#10b981}",
+			".mxu_acc.warn{--mxu-tone:#f59e0b}",
+			".mxu_acc.danger{--mxu-tone:#f43f5e}",
+			".mxu_acc.muted{--mxu-tone:#64748b}",
+			".mxu_acc.loading{--mxu-tone:#7c8cff}",
 			".mxu_acc_head{display:flex;align-items:center;gap:6px;margin-bottom:8px}",
-			".mxu_chip{font-size:10px;font-weight:650;padding:2px 7px;border-radius:999px;background:color-mix(in srgb, var(--dsw-alias-brand-primary,#7c8cff) 14%, transparent);color:var(--dsw-alias-brand-primary,#7c8cff)}",
-			".mxu_acc_name{font-size:12px;font-weight:600}",
-			".mxu_model{margin-bottom:8px}",
+			".mxu_chip{font-size:9.5px;font-weight:700;padding:2.5px 7px;border-radius:999px;background:color-mix(in srgb,var(--mxu-tone,#7c8cff) 14%,transparent);color:var(--mxu-tone,#7c8cff);letter-spacing:.02em}",
+			".mxu_acc_name{font-size:12px;font-weight:650;letter-spacing:-.005em;display:flex;align-items:center;gap:6px}",
+			".mxu_stale{font-size:9px;font-weight:600;padding:1px 5px;border-radius:4px;background:color-mix(in srgb,#f59e0b 14%,transparent);color:#fbbf24;letter-spacing:.02em}",
+
+			// === model rows ===
+			".mxu_model{margin-bottom:9px}",
 			".mxu_model:last-child{margin-bottom:0}",
-			".mxu_model_name{font-size:11px;font-weight:600;margin-bottom:5px;color:var(--dsw-alias-label-secondary,#8b93a1)}",
-			".mxu_row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;margin-bottom:3px}",
-			".mxu_row b{font-weight:650;font-variant-numeric:tabular-nums}",
-			".mxu_bar{height:4px;border-radius:999px;background:color-mix(in srgb, var(--dsw-alias-label-secondary,#888) 16%, transparent);overflow:hidden}",
-			".mxu_bar_fill{display:block;height:100%;border-radius:inherit;background:var(--mxu-tone, var(--dsw-alias-brand-primary,#7c8cff));transition:width .4s ease}",
-			".mxu_bar.ok{--mxu-tone:var(--dsw-alias-state-success-primary,#3dbe73)}",
-			".mxu_bar.warn{--mxu-tone:var(--dsw-alias-state-warn-primary,#e3a008)}",
-			".mxu_bar.danger{--mxu-tone:var(--dsw-alias-state-error-primary,#ef5b5b)}",
-			".mxu_bar.muted{--mxu-tone:var(--dsw-alias-label-secondary,#8b93a1)}",
-			".mxu_hint{margin-top:8px;font-size:10px;color:var(--dsw-alias-label-secondary,#8b93a1)}",
+			".mxu_model_name{font-size:10.5px;font-weight:650;margin-bottom:6px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 88%,transparent);letter-spacing:.01em;text-transform:uppercase}",
+			".mxu_row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;margin-bottom:4px}",
+			".mxu_row span{color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent)}",
+			".mxu_row b{font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;color:var(--dsw-alias-label-primary,#f4f6f9)}",
+
+			// === bar ===
+			".mxu_bar{position:relative;height:5px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-label-secondary,#888) 14%,transparent);overflow:hidden;margin-bottom:9px}",
+			".mxu_bar:last-child{margin-bottom:0}",
+			".mxu_bar_fill{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--mxu-tone),var(--mxu-tone-2,var(--mxu-tone)));position:relative;overflow:hidden;transition:width .5s cubic-bezier(.3,.7,.4,1)}",
+			".mxu_bar_fill::after{content:\"\";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);transform:translateX(-100%);animation:mxu_shimmer 2.2s ease-in-out infinite}",
+			"@keyframes mxu_shimmer{0%{transform:translateX(-100%)}60%,100%{transform:translateX(120%)}}",
+			".mxu_bar.ok{--mxu-tone:#10b981;--mxu-tone-2:#34d399}",
+			".mxu_bar.warn{--mxu-tone:#f59e0b;--mxu-tone-2:#fbbf24}",
+			".mxu_bar.danger{--mxu-tone:#f43f5e;--mxu-tone-2:#fb7185}",
+			".mxu_bar.muted{--mxu-tone:#64748b;--mxu-tone-2:#94a3b8}",
+			".mxu_bar.dim{opacity:.55}",
+
+			// === hint footer ===
+			".mxu_hint{margin-top:10px;padding-top:9px;border-top:1px dashed color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 14%,transparent);font-size:10px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 86%,transparent);line-height:1.55;display:flex;align-items:center;gap:6px}",
+			".mxu_hint::before{content:\"\";width:5px;height:5px;border-radius:50%;background:var(--mxu-tone,#7c8cff);flex:none;opacity:.7}",
 		].join("");
 
 		if (typeof document !== "undefined" && document.querySelector('style[data-plugin-css="dsh-minimax-usage"]') === null) {
@@ -106,7 +189,7 @@ window.__ModuleLoader__.load({
 
 		function formatPercent(percent) {
 			if (percent === undefined || percent === null || Number.isNaN(percent)) return "—";
-			return Math.round(percent) + "%";
+			return Math.round(percent);
 		}
 
 		function formatCountdown(endAt) {
@@ -148,7 +231,7 @@ window.__ModuleLoader__.load({
 			const height = typeof window === "undefined" ? 800 : window.innerHeight;
 			return {
 				left: Math.max(MARGIN, width - BUBBLE - 24),
-				top: Math.max(MARGIN, height - BUBBLE - 88),
+				top: Math.max(MARGIN, height - BUBBLE - 96),
 			};
 		}
 
@@ -188,7 +271,7 @@ window.__ModuleLoader__.load({
 
 			const load = react.useCallback((force) => {
 				if (force) setBusy(true);
-				return api(force ? "/refresh" : "/status", force ? { method: "POST" } : undefined)
+				return api(force ? + "/refresh" : "/status", force ? { method: "POST" } : undefined)
 					.then((r) => {
 						if (r.body && typeof r.body === "object") setData(r.body);
 					})
@@ -229,6 +312,12 @@ window.__ModuleLoader__.load({
 				viewBox: "0 0 " + RING + " " + RING,
 				"aria-hidden": "true",
 			},
+				createElement("defs", null,
+					createElement("linearGradient", { id: GRAD_ID, x1: "0%", y1: "0%", x2: "100%", y2: "100%" },
+						createElement("stop", { offset: "0%", style: { stopColor: "var(--mxu-tone)" } }),
+						createElement("stop", { offset: "100%", style: { stopColor: "var(--mxu-tone-2)" } }),
+					),
+				),
 				createElement("circle", {
 					className: "mxu_ring_track",
 					cx: RING / 2,
@@ -249,17 +338,25 @@ window.__ModuleLoader__.load({
 		function BarLine(props) {
 			const tone = props.included === false ? "muted" : toneOf(props.percent);
 			const width = props.included === false ? 0 : Math.max(0, Math.min(100, props.percent ?? 0));
-			const value = props.included === false ? "未包含" : formatPercent(props.percent);
+			const value = props.included === false ? "未包含" : (Math.round(props.percent) + "%");
 			const reset = props.included === false ? "" : props.reset;
-			return createElement("div", { style: { marginBottom: "7px" } },
+			return createElement("div", { className: "mxu_bar-wrap" },
 				createElement("div", { className: "mxu_row" },
 					createElement("span", null, props.label + (reset ? " · " + reset : "")),
 					createElement("b", null, value),
 				),
-				createElement("div", { className: "mxu_bar " + tone },
+				createElement("div", { className: "mxu_bar " + tone + (props.included === false ? " dim" : "") },
 					createElement("span", { className: "mxu_bar_fill", style: { width: width + "%" } }),
 				),
 			);
+		}
+
+		function accountTone(account) {
+			if (!account || !account.ok) return "danger";
+			if (account.stale) return "warn";
+			const primary = (account.models || []).find((m) => m.included !== false);
+			if (!primary) return "muted";
+			return toneOf(primary.intervalRemainingPercent);
 		}
 
 		function UsageBubble() {
@@ -267,10 +364,13 @@ window.__ModuleLoader__.load({
 			void tick;
 			const [pos, setPos] = react.useState(defaultPos);
 			const [dragging, setDragging] = react.useState(false);
+			const [mounted, setMounted] = react.useState(false);
 			const drag = react.useRef(null);
 
 			react.useEffect(() => {
 				setPos(loadPos());
+				const id = requestAnimationFrame(() => setMounted(true));
+				return () => cancelAnimationFrame(id);
 			}, []);
 
 			react.useEffect(() => {
@@ -283,14 +383,15 @@ window.__ModuleLoader__.load({
 			const primary = pickPrimaryModel(accounts);
 			const percent = primary && primary.model ? primary.model.intervalRemainingPercent : undefined;
 			const accountError = (accounts.find((a) => a && a.error) || {}).error;
-			const isLoading = data && data.phase === "init";
+			const isLoading = !data || data.phase === "init";
 			const failed = !isLoading && !!(data && (data.error || accountError) && !accounts.some((a) => a && a.ok));
-			const tone = failed ? "danger" : toneOf(percent);
-			const short = primary ? String(Math.round(percent)) : (failed ? "!" : "");
+			const tone = isLoading ? "loading" : (failed ? "danger" : toneOf(percent));
+			const short = primary ? Math.round(percent) : (failed ? "!" : null);
 			const title = primary
-				? ("MiniMax 5h 剩余 " + formatPercent(percent))
+				? ("MiniMax 5h 剩余 " + formatPercent(percent) + "%")
 				: (isLoading ? "MiniMax 加载中" : (data && data.error ? data.error : (accountError || "MiniMax 未配置")));
 			const liveLabel = isLoading ? "加载中" : (failed ? "异常" : (busy ? "刷新中" : "自动刷新"));
+			const dotTone = failed ? "danger" : (busy ? "warn" : "ok");
 
 			const panelLeft = pos.left > (typeof window === "undefined" ? 600 : window.innerWidth / 2);
 			const panelTop = pos.top > (typeof window === "undefined" ? 400 : window.innerHeight / 2);
@@ -340,11 +441,24 @@ window.__ModuleLoader__.load({
 					savePos(next);
 					return next;
 				});
-				if (!state.moved) load(true);
+				if (!state.moved) {
+					load(true);
+				}
 			};
 
+			const core = isLoading && !primary
+				? createElement("span", { className: "mxu_spin", key: "spin" })
+				: failed
+					? createElement("span", { className: "mxu_pct_err", key: "err" }, "!")
+					: short !== null && short !== undefined
+						? createElement("span", { className: "mxu_pct", key: "pct" },
+							short,
+							createElement("em", null, "%"),
+						)
+						: createElement("span", { className: "mxu_pct mxu_pct_dash", key: "dash" }, "—");
+
 			return createElement("div", {
-				className: "mxu_float",
+				className: "mxu_float" + (mounted ? "" : " mxu_pre"),
 				"data-dragging": dragging ? "true" : undefined,
 				style: { left: pos.left + "px", top: pos.top + "px" },
 			},
@@ -352,6 +466,7 @@ window.__ModuleLoader__.load({
 					type: "button",
 					className: "mxu_bubble " + tone,
 					title: title + " · 悬停看详情 · 拖动换位置 · 点击刷新",
+					"aria-label": title,
 					onPointerDown,
 					onPointerMove,
 					onPointerUp,
@@ -359,37 +474,40 @@ window.__ModuleLoader__.load({
 				},
 					createElement(Ring, { percent: failed ? 0 : percent }),
 					createElement("span", { className: "mxu_core" },
-						busy && !primary
-							? createElement("span", { className: "mxu_spin" })
-							: short
-								? createElement("span", { className: "mxu_pct" },
-										short,
-										createElement("span", { className: "mxu_unit" }, "%"),
-									)
-								: createElement("span", { className: "mxu_pct" }, "—"),
+						core,
 						createElement("span", { className: "mxu_tag" }, "5h"),
 					),
 				),
 				createElement("div", { className: "mxu_panel", style: panelStyle },
 					createElement("div", { className: "mxu_head" },
 						createElement("div", { className: "mxu_brand" },
-							createElement("span", { className: "mxu_title" }, "MiniMax"),
-							createElement("span", { className: "mxu_sub" }, "Token Plan 用量"),
+							createElement("span", { className: "mxu_logo", "aria-hidden": "true" }, "M"),
+							createElement("div", null,
+								createElement("div", { className: "mxu_title" }, "MiniMax"),
+								createElement("div", { className: "mxu_sub" }, "Token Plan 用量"),
+							),
 						),
 						createElement("span", { className: "mxu_live" },
-							createElement("span", { className: "mxu_dot " + (failed ? "danger" : (busy ? "warn" : "ok")) }),
-							liveLabel + (data && data.fetchedAt && !busy ? " · " + formatFetchedAt(data.fetchedAt) : ""),
+							createElement("span", { className: "mxu_dot " + dotTone }),
+							liveLabel + (data && data.fetchedAt && !busy && !isLoading ? " · " + formatFetchedAt(data.fetchedAt) : ""),
 						),
 					),
 					data && data.error ? createElement("div", { className: "mxu_err" }, data.error) : null,
 					accounts.length === 0 && !(data && data.error)
-						? createElement("div", { className: "mxu_sub" }, isLoading ? "加载中…" : "正在读取用量…")
+						? createElement("div", { className: "mxu_empty" },
+							isLoading ? createElement("span", { className: "mxu_spin" }) : null,
+							createElement("div", null, isLoading ? "正在拉取用量…" : "暂无可用账号"),
+						)
 						: null,
-					accounts.map((account) => createElement("div", { className: "mxu_acc", key: account.region },
+					accounts.map((account) => createElement("div", {
+					className: "mxu_acc " + accountTone(account),
+					key: account.region,
+				},
 						createElement("div", { className: "mxu_acc_head" },
 							createElement("span", { className: "mxu_chip" }, REGION_LABEL[account.region] || account.region),
 							createElement("span", { className: "mxu_acc_name" },
-								(account.planName || "订阅套餐") + (account.stale ? " · 可能过期" : ""),
+								account.planName || "订阅套餐",
+								account.stale ? createElement("span", { className: "mxu_stale" }, "可能过期") : null,
 							),
 						),
 						account.error ? createElement("div", { className: "mxu_err" }, account.error) : null,
@@ -409,7 +527,7 @@ window.__ModuleLoader__.load({
 							}),
 						)),
 					)),
-					createElement("div", { className: "mxu_hint" }, "整轮空闲 15 秒后更新 · 心跳 2 分钟起翻倍 · 点击立即刷新"),
+					accounts.length > 0 ? createElement("div", { className: "mxu_hint" }, "整轮空闲 15 秒后更新 · 心跳 2 分钟起翻倍 · 点击立即刷新") : null,
 				),
 			);
 		}
