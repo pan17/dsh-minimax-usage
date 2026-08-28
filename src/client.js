@@ -154,6 +154,35 @@ window.__ModuleLoader__.load({
 			// === hint footer ===
 			".mxu_hint{margin-top:10px;padding-top:9px;border-top:1px dashed color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 14%,transparent);font-size:10px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 86%,transparent);line-height:1.55;display:flex;align-items:center;gap:6px}",
 			".mxu_hint::before{content:\"\";width:5px;height:5px;border-radius:50%;background:var(--mxu-tone,#7c8cff);flex:none;opacity:.7}",
+
+			// === refresh feedback (manual click on the bubble) ===
+			// Vibrant indigo tone + glow while busy, regardless of underlying data tone.
+			".mxu_bubble[data-busy=\"true\"] .mxu_spin::before{border-top-color:#818cf8;border-right-color:color-mix(in srgb,#818cf8 60%,transparent)}",
+			".mxu_bubble[data-busy=\"true\"] .mxu_spin::after{border:1px solid color-mix(in srgb,#818cf8 28%,transparent)}",
+			".mxu_bubble[data-busy=\"true\"] .mxu_ring_value{filter:drop-shadow(0 0 7px color-mix(in srgb,#818cf8 65%,transparent))}",
+			".mxu_bubble[data-busy=\"true\"]{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,#818cf8 32%,transparent),0 0 38px -4px color-mix(in srgb,#818cf8 60%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}",
+			".mxu_bubble[data-busy=\"true\"]::before{background:linear-gradient(160deg,rgba(129,140,248,.20) 0%,rgba(129,140,248,0) 40%)}",
+
+			// Brief green pulse on successful refresh completion.
+			".mxu_bubble[data-success=\"true\"]{animation:mxu_success_glow .9s cubic-bezier(.2,.9,.3,1.2)}",
+			"@keyframes mxu_success_glow{0%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,#10b981 18%,transparent),0 0 28px -4px color-mix(in srgb,#10b981 45%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}35%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 2px color-mix(in srgb,#10b981 65%,transparent),0 0 56px color-mix(in srgb,#10b981 75%,transparent),inset 0 1px 0 rgba(255,255,255,.16)}100%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 28px -4px color-mix(in srgb,var(--mxu-tone) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}}",
+
+			// Live label switches to the refreshing tone and the dot pulses faster.
+			".mxu_live.refreshing{color:var(--mxu-tone,#818cf8)}",
+			".mxu_live.refreshing .mxu_dot{animation:mxu_dot_blink .7s ease-in-out infinite}",
+			"@keyframes mxu_dot_blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}",
+
+			// Tiny inline spinner that can sit next to the live label.
+			".mxu_inline_spin{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--mxu-tone,#818cf8) 28%,transparent);border-top-color:var(--mxu-tone,#818cf8);animation:mxu_spin .8s linear infinite;margin-left:3px;vertical-align:-1px}",
+
+			// Top-of-panel shimmer bar visible only during refresh.
+			".mxu_panel_refresh{position:absolute;top:0;left:14px;right:14px;height:2px;border-radius:0 0 2px 2px;background:linear-gradient(90deg,transparent 0%,var(--mxu-tone,#818cf8) 50%,transparent 100%);opacity:0;transform:translateX(-100%);transition:opacity .2s ease;pointer-events:none}",
+			".mxu_panel_refresh.busy{opacity:.9;animation:mxu_panel_shimmer 1.1s cubic-bezier(.4,0,.6,1) infinite}",
+			"@keyframes mxu_panel_shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}",
+
+			// Slightly more energetic empty-state when a manual refresh is mid-flight.
+			".mxu_empty.refreshing .mxu_spin{border-top-color:var(--mxu-tone,#818cf8);border-right-color:color-mix(in srgb,#818cf8 60%,transparent)}",
+			".mxu_empty.refreshing div{color:color-mix(in srgb,var(--mxu-tone,#818cf8) 35%,var(--dsw-alias-label-secondary,#8b93a1))}",
 		].join("");
 
 		if (typeof document !== "undefined" && document.querySelector('style[data-plugin-css="dsh-minimax-usage"]') === null) {
@@ -271,7 +300,7 @@ window.__ModuleLoader__.load({
 
 			const load = react.useCallback((force) => {
 				if (force) setBusy(true);
-				return api(force ? + "/refresh" : "/status", force ? { method: "POST" } : undefined)
+				return api(force ? "/refresh" : "/status", force ? { method: "POST" } : undefined)
 					.then((r) => {
 						if (r.body && typeof r.body === "object") setData(r.body);
 					})
@@ -365,7 +394,20 @@ window.__ModuleLoader__.load({
 			const [pos, setPos] = react.useState(defaultPos);
 			const [dragging, setDragging] = react.useState(false);
 			const [mounted, setMounted] = react.useState(false);
+			const [success, setSuccess] = react.useState(false);
 			const drag = react.useRef(null);
+			const prevBusy = react.useRef(false);
+
+			// Trigger the success glow when a manual refresh completes.
+			react.useEffect(() => {
+				if (prevBusy.current && !busy) {
+					setSuccess(true);
+					const timer = setTimeout(() => setSuccess(false), 950);
+					prevBusy.current = false;
+					return () => clearTimeout(timer);
+				}
+				prevBusy.current = busy;
+			}, [busy]);
 
 			react.useEffect(() => {
 				setPos(loadPos());
@@ -392,6 +434,7 @@ window.__ModuleLoader__.load({
 				: (isLoading ? "MiniMax 加载中" : (data && data.error ? data.error : (accountError || "MiniMax 未配置")));
 			const liveLabel = isLoading ? "加载中" : (failed ? "异常" : (busy ? "刷新中" : "自动刷新"));
 			const dotTone = failed ? "danger" : (busy ? "warn" : "ok");
+			const isRefreshing = busy || isLoading;
 
 			const panelLeft = pos.left > (typeof window === "undefined" ? 600 : window.innerWidth / 2);
 			const panelTop = pos.top > (typeof window === "undefined" ? 400 : window.innerHeight / 2);
@@ -446,16 +489,18 @@ window.__ModuleLoader__.load({
 				}
 			};
 
-			const core = isLoading && !primary
+			const core = busy
 				? createElement("span", { className: "mxu_spin", key: "spin" })
-				: failed
-					? createElement("span", { className: "mxu_pct_err", key: "err" }, "!")
-					: short !== null && short !== undefined
-						? createElement("span", { className: "mxu_pct", key: "pct" },
-							short,
-							createElement("em", null, "%"),
-						)
-						: createElement("span", { className: "mxu_pct mxu_pct_dash", key: "dash" }, "—");
+				: isLoading && !primary
+					? createElement("span", { className: "mxu_spin", key: "spin" })
+					: failed
+						? createElement("span", { className: "mxu_pct_err", key: "err" }, "!")
+						: short !== null && short !== undefined
+							? createElement("span", { className: "mxu_pct", key: "pct" },
+								short,
+								createElement("em", null, "%"),
+							)
+							: createElement("span", { className: "mxu_pct mxu_pct_dash", key: "dash" }, "—");
 
 			return createElement("div", {
 				className: "mxu_float" + (mounted ? "" : " mxu_pre"),
@@ -467,6 +512,8 @@ window.__ModuleLoader__.load({
 					className: "mxu_bubble " + tone,
 					title: title + " · 悬停看详情 · 拖动换位置 · 点击刷新",
 					"aria-label": title,
+					"data-busy": busy ? "true" : undefined,
+					"data-success": success ? "true" : undefined,
 					onPointerDown,
 					onPointerMove,
 					onPointerUp,
@@ -479,6 +526,7 @@ window.__ModuleLoader__.load({
 					),
 				),
 				createElement("div", { className: "mxu_panel", style: panelStyle },
+					createElement("div", { className: "mxu_panel_refresh" + (busy ? " busy" : ""), "aria-hidden": "true" }),
 					createElement("div", { className: "mxu_head" },
 						createElement("div", { className: "mxu_brand" },
 							createElement("span", { className: "mxu_logo", "aria-hidden": "true" }, "M"),
@@ -487,16 +535,21 @@ window.__ModuleLoader__.load({
 								createElement("div", { className: "mxu_sub" }, "Token Plan 用量"),
 							),
 						),
-						createElement("span", { className: "mxu_live" },
+						createElement("span", { className: "mxu_live" + (busy ? " refreshing" : "") },
 							createElement("span", { className: "mxu_dot " + dotTone }),
 							liveLabel + (data && data.fetchedAt && !busy && !isLoading ? " · " + formatFetchedAt(data.fetchedAt) : ""),
+							busy ? createElement("span", { className: "mxu_inline_spin", "aria-hidden": "true" }) : null,
 						),
 					),
 					data && data.error ? createElement("div", { className: "mxu_err" }, data.error) : null,
 					accounts.length === 0 && !(data && data.error)
-						? createElement("div", { className: "mxu_empty" },
-							isLoading ? createElement("span", { className: "mxu_spin" }) : null,
-							createElement("div", null, isLoading ? "正在拉取用量…" : "暂无可用账号"),
+						? createElement("div", { className: "mxu_empty" + (busy ? " refreshing" : "") },
+							(isLoading || busy) ? createElement("span", { className: "mxu_spin" }) : null,
+							createElement("div", null,
+								busy ? "正在刷新用量…"
+								: isLoading ? "正在拉取用量…"
+								: "暂无可用账号"
+							),
 						)
 						: null,
 					accounts.map((account) => createElement("div", {

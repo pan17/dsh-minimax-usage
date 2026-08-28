@@ -5,6 +5,16 @@
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-28
+
+### Fixed
+
+- 修复手动刷新请求 URL 错误的 bug：`load(true)` 实际发到 `/minimax-usage/apiNaN`（一元加号把 `"/refresh"` 转成了 `NaN`），服务器 404 后客户端 `setData({})`，导致气泡瞬间变灰显示"暂无可用账号"，过一会才被下一次 polling 拉回正确数据。改为正确的 `/minimax-usage/api/refresh`。
+
+### Changed
+
+- 优化手动刷新的视觉反馈：点击气泡触发刷新时，气泡核心替换为 indigo spinner 并叠加 indigo 光晕；面板顶部出现横向 shimmer 进度条；live label 切换到刷新色 + 更快闪烁的状态点 + 内联小转圈；空账号状态下显示"正在刷新用量…"。刷新成功后，气泡播放 0.95s 绿色脉冲辉光，给到明确的"刷好了"反馈。
+
 ## [0.1.4] - 2026-08-28
 
 ### Changed

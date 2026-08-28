@@ -1,6 +1,6 @@
 {
   "name": "dsh-minimax-usage",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Show MiniMax Token Plan subscription usage in the DSH Web UI",
   "type": "module",
   "files": [
