@@ -13,6 +13,10 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		const react = require("react");
 		const createElement = react.createElement;
+		// createPortal lives on react-dom, NOT on react. DeepSeek-pet uses the
+		// same require("react-dom") pattern (src/client/DeepSeekPet.jsx:482).
+		const reactDom = require("react-dom");
+		const createPortal = reactDom.createPortal;
 
 		const inject = ["slots"];
 		const POLL_MS = 15000;
@@ -27,7 +31,7 @@ window.__ModuleLoader__.load({
 
 		const css = [
 			// === root + draggable wrapper ===
-			".mxu_float{pointer-events:auto;position:absolute;z-index:30;width:" + BUBBLE + "px;height:" + BUBBLE + "px;animation:mxu_in .28s cubic-bezier(.2,.9,.3,1.2)}",
+			".mxu_float{pointer-events:auto;position:fixed;z-index:50;width:" + BUBBLE + "px;height:" + BUBBLE + "px;animation:mxu_in .28s cubic-bezier(.2,.9,.3,1.2)}",
 			"@keyframes mxu_in{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}",
 
 			// === bubble shell ===
@@ -502,7 +506,7 @@ window.__ModuleLoader__.load({
 							)
 							: createElement("span", { className: "mxu_pct mxu_pct_dash", key: "dash" }, "—");
 
-			return createElement("div", {
+			const wrapper = createElement("div", {
 				className: "mxu_float" + (mounted ? "" : " mxu_pre"),
 				"data-dragging": dragging ? "true" : undefined,
 				style: { left: pos.left + "px", top: pos.top + "px" },
@@ -583,6 +587,7 @@ window.__ModuleLoader__.load({
 					accounts.length > 0 ? createElement("div", { className: "mxu_hint" }, "整轮空闲 15 秒后更新 · 心跳 2 分钟起翻倍 · 点击立即刷新") : null,
 				),
 			);
+		return createPortal(wrapper, document.body);
 		}
 
 		function apply(ctx) {
