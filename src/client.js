@@ -27,37 +27,46 @@ window.__ModuleLoader__.load({
 		const RADIUS = (RING - STROKE) / 2;
 		const CIRCUM = 2 * Math.PI * RADIUS;
 		const MARGIN = 14;
+		const DOCK_THRESHOLD = 24;
+		const PEEK = 16;
+		const COLLAPSE_MS = 280;
 		const GRAD_ID = "mxu-ring-grad";
 
 		const css = [
 			// === root + draggable wrapper ===
-			".mxu_float{pointer-events:auto;position:fixed;z-index:50;width:" + BUBBLE + "px;height:" + BUBBLE + "px;animation:mxu_in .28s cubic-bezier(.2,.9,.3,1.2)}",
+			".mxu_float{pointer-events:auto;position:fixed;z-index:50;width:" + BUBBLE + "px;height:" + BUBBLE + "px;animation:mxu_in .28s cubic-bezier(.2,.9,.3,1.2);transition:left .22s cubic-bezier(.2,.9,.3,1.1),top .22s cubic-bezier(.2,.9,.3,1.1)}",
+			".mxu_float.mxu_pre,.mxu_float[data-dragging=true]{transition:none}",
 			"@keyframes mxu_in{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}",
 
 			// === bubble shell ===
 			".mxu_bubble{position:relative;width:" + BUBBLE + "px;height:" + BUBBLE + "px;padding:0;border:0;border-radius:50%;cursor:grab;display:grid;place-items:center;user-select:none;touch-action:none;isolation:isolate;",
-			// radial gradient: tone-tinted highlight at top-left, deep bg at bottom-right
-			"background:radial-gradient(120% 120% at 28% 22%,color-mix(in srgb,var(--mxu-tone) 16%,var(--dsw-alias-bg-overlay,#16181d)) 0%,var(--dsw-alias-bg-overlay,#16181d) 58%,color-mix(in srgb,#000 28%,var(--dsw-alias-bg-overlay,#16181d)) 100%);",
-			// layered shadow: drop + tone glow + 1px rim + top sheen + bottom shade
-			"box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 28px -4px color-mix(in srgb,var(--mxu-tone) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18);",
+			// light-first surface: layer-1 is white in light theme (overlay is gray-blue and looked dirty)
+			"background:radial-gradient(120% 120% at 28% 22%,color-mix(in srgb,var(--mxu-tone) 12%,var(--dsw-alias-bg-layer-1,#fff)) 0%,var(--dsw-alias-bg-layer-1,#fff) 72%);",
+			// 1px rim + inner sheen only — no outer drop/glow, no dark wash
+			"box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72);",
 			"backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);",
-			// subtle inner noise overlay for premium texture
 			"transition:transform .22s cubic-bezier(.2,.9,.3,1.2),box-shadow .22s ease}",
+			"body[data-ds-dark-theme] .mxu_bubble{background:radial-gradient(120% 120% at 28% 22%,color-mix(in srgb,var(--mxu-tone) 16%,var(--dsw-alias-bg-overlay,#16181d)) 0%,var(--dsw-alias-bg-overlay,#16181d) 58%,color-mix(in srgb,#000 22%,var(--dsw-alias-bg-overlay,#16181d)) 100%);",
+			"box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}",
 			// top sheen pseudo-element (cleaner than nested divs)
-			".mxu_bubble::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(160deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 38%);pointer-events:none;mix-blend-mode:screen}",
+			".mxu_bubble::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(160deg,rgba(255,255,255,.42) 0%,rgba(255,255,255,0) 42%);pointer-events:none}",
+			"body[data-ds-dark-theme] .mxu_bubble::before{background:linear-gradient(160deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 38%);mix-blend-mode:screen}",
 			// micro inner ring under the SVG ring for crisp edge
-			".mxu_bubble::after{content:\"\";position:absolute;inset:2px;border-radius:inherit;border:1px solid rgba(255,255,255,.05);mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);mask-composite:exclude;-webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;pointer-events:none}",
+			".mxu_bubble::after{content:\"\";position:absolute;inset:2px;border-radius:inherit;border:1px solid color-mix(in srgb,var(--dsw-alias-label-primary,#000) 8%,transparent);mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);mask-composite:exclude;-webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;pointer-events:none}",
 
 			// === hover / drag / focus ===
-			".mxu_bubble:hover{transform:scale(1.06);box-shadow:0 18px 44px rgba(0,0,0,.36),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 32%,transparent),0 0 36px -2px color-mix(in srgb,var(--mxu-tone) 60%,transparent),inset 0 1px 0 rgba(255,255,255,.14)}",
+			".mxu_bubble:hover{transform:scale(1.06);box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 42%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.8)}",
+			"body[data-ds-dark-theme] .mxu_bubble:hover{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 32%,transparent),inset 0 1px 0 rgba(255,255,255,.14)}",
 			".mxu_bubble:active{cursor:grabbing}",
-			".mxu_float[data-dragging=true] .mxu_bubble{cursor:grabbing;transform:scale(1.10);transition:none;box-shadow:0 22px 52px rgba(0,0,0,.42),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 38%,transparent),0 0 44px color-mix(in srgb,var(--mxu-tone) 55%,transparent)}",
+			".mxu_float[data-dragging=true] .mxu_bubble{cursor:grabbing;transform:scale(1.10);transition:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 48%,var(--dsw-alias-border-l2,#cfd3d6))}",
+			"body[data-ds-dark-theme] .mxu_float[data-dragging=true] .mxu_bubble{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 38%,transparent)}",
+			".mxu_float[data-collapsed=true] .mxu_bubble:hover{transform:none}",
 
 			// === ring (SVG) ===
 			".mxu_ring{position:absolute;inset:4px;width:" + RING + "px;height:" + RING + "px;transform:rotate(-90deg);overflow:visible}",
 			".mxu_ring_track{fill:none;stroke:color-mix(in srgb,var(--mxu-tone) 18%,transparent);stroke-width:" + STROKE + "}",
 			".mxu_ring_value{fill:none;stroke:url(#" + GRAD_ID + ");stroke-width:" + STROKE + ";stroke-linecap:round;",
-			"transition:stroke-dashoffset .55s cubic-bezier(.3,.7,.4,1),stroke .3s ease;filter:drop-shadow(0 0 5px color-mix(in srgb,var(--mxu-tone) 55%,transparent))}",
+			"transition:stroke-dashoffset .55s cubic-bezier(.3,.7,.4,1),stroke .3s ease}",
 
 			// === core (center content) ===
 			".mxu_core{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1}",
@@ -74,7 +83,7 @@ window.__ModuleLoader__.load({
 			".mxu_bubble.danger{--mxu-tone:#f43f5e;--mxu-tone-2:#fb7185;--mxu-tone-soft:rgba(244,63,94,.12)}",
 			".mxu_bubble.muted{--mxu-tone:#64748b;--mxu-tone-2:#94a3b8;--mxu-tone-soft:rgba(100,116,139,.12)}",
 			".mxu_bubble.loading{--mxu-tone:#7c8cff;--mxu-tone-2:#a5b4fc;--mxu-tone-soft:rgba(124,140,255,.12);animation:mxu_pulse 2s ease-in-out infinite}",
-			"@keyframes mxu_pulse{0%,100%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 28px -4px color-mix(in srgb,var(--mxu-tone) 35%,transparent)}50%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 35%,transparent),0 0 44px 4px color-mix(in srgb,var(--mxu-tone) 55%,transparent)}}",
+			"@keyframes mxu_pulse{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 52%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}}",
 
 			// === spinner (loading) ===
 			".mxu_spin{width:18px;height:18px;border-radius:50%;position:relative}",
@@ -98,7 +107,7 @@ window.__ModuleLoader__.load({
 			"}",
 			".mxu_panel::before{content:\"\";position:absolute;inset:0;border-radius:inherit;padding:1px;background:linear-gradient(140deg,color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 50%,transparent),color-mix(in srgb,var(--mxu-tone,#7c8cff) 28%,transparent) 50%,color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 18%,transparent));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.85}",
 			".mxu_float:hover .mxu_panel,.mxu_float:focus-within .mxu_panel{opacity:1;transform:none}",
-			".mxu_float[data-dragging=true] .mxu_panel{opacity:0;pointer-events:none}",
+			".mxu_float[data-dragging=true] .mxu_panel,.mxu_float[data-collapsed=true] .mxu_panel{opacity:0;pointer-events:none}",
 
 			// === header ===
 			".mxu_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:11px}",
@@ -163,13 +172,13 @@ window.__ModuleLoader__.load({
 			// Vibrant indigo tone + glow while busy, regardless of underlying data tone.
 			".mxu_bubble[data-busy=\"true\"] .mxu_spin::before{border-top-color:#818cf8;border-right-color:color-mix(in srgb,#818cf8 60%,transparent)}",
 			".mxu_bubble[data-busy=\"true\"] .mxu_spin::after{border:1px solid color-mix(in srgb,#818cf8 28%,transparent)}",
-			".mxu_bubble[data-busy=\"true\"] .mxu_ring_value{filter:drop-shadow(0 0 7px color-mix(in srgb,#818cf8 65%,transparent))}",
-			".mxu_bubble[data-busy=\"true\"]{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,#818cf8 32%,transparent),0 0 38px -4px color-mix(in srgb,#818cf8 60%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}",
+			".mxu_bubble[data-busy=\"true\"]{box-shadow:0 0 0 1px color-mix(in srgb,#818cf8 42%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}",
+			"body[data-ds-dark-theme] .mxu_bubble[data-busy=\"true\"]{box-shadow:0 0 0 1px color-mix(in srgb,#818cf8 32%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}",
 			".mxu_bubble[data-busy=\"true\"]::before{background:linear-gradient(160deg,rgba(129,140,248,.20) 0%,rgba(129,140,248,0) 40%)}",
 
 			// Brief green pulse on successful refresh completion.
 			".mxu_bubble[data-success=\"true\"]{animation:mxu_success_glow .9s cubic-bezier(.2,.9,.3,1.2)}",
-			"@keyframes mxu_success_glow{0%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,#10b981 18%,transparent),0 0 28px -4px color-mix(in srgb,#10b981 45%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}35%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 2px color-mix(in srgb,#10b981 65%,transparent),0 0 56px color-mix(in srgb,#10b981 75%,transparent),inset 0 1px 0 rgba(255,255,255,.16)}100%{box-shadow:0 14px 36px rgba(0,0,0,.30),0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 28px -4px color-mix(in srgb,var(--mxu-tone) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}}",
+			"@keyframes mxu_success_glow{0%{box-shadow:0 0 0 1px color-mix(in srgb,#10b981 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}35%{box-shadow:0 0 0 2px color-mix(in srgb,#10b981 55%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.85)}100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}}",
 
 			// Live label switches to the refreshing tone and the dot pulses faster.
 			".mxu_live.refreshing{color:var(--mxu-tone,#818cf8)}",
@@ -259,12 +268,28 @@ window.__ModuleLoader__.load({
 			return null;
 		}
 
-		function defaultPos() {
-			const width = typeof window === "undefined" ? 1200 : window.innerWidth;
-			const height = typeof window === "undefined" ? 800 : window.innerHeight;
+		function viewport() {
 			return {
-				left: Math.max(MARGIN, width - BUBBLE - 24),
+				width: typeof window === "undefined" ? 1200 : window.innerWidth,
+				height: typeof window === "undefined" ? 800 : window.innerHeight,
+			};
+		}
+
+		function isDockSide(value) {
+			return value === "left" || value === "right" || value === "top" || value === "bottom";
+		}
+
+		function finePointerHover() {
+			if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
+			return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+		}
+
+		function defaultPos() {
+			const { width, height } = viewport();
+			return {
+				left: Math.max(MARGIN, width - BUBBLE - 36),
 				top: Math.max(MARGIN, height - BUBBLE - 96),
+				dock: null,
 			};
 		}
 
@@ -274,7 +299,8 @@ window.__ModuleLoader__.load({
 				if (!raw) return defaultPos();
 				const parsed = JSON.parse(raw);
 				if (typeof parsed.left !== "number" || typeof parsed.top !== "number") return defaultPos();
-				return clampPos(parsed);
+				const dock = isDockSide(parsed.dock) ? parsed.dock : null;
+				return clampPos({ left: parsed.left, top: parsed.top, dock }, { dock, margin: dock ? 0 : MARGIN });
 			} catch {
 				return defaultPos();
 			}
@@ -282,19 +308,84 @@ window.__ModuleLoader__.load({
 
 		function savePos(pos) {
 			try {
-				localStorage.setItem(POS_KEY, JSON.stringify(pos));
+				localStorage.setItem(POS_KEY, JSON.stringify({
+					left: pos.left,
+					top: pos.top,
+					dock: isDockSide(pos.dock) ? pos.dock : null,
+				}));
 			} catch {
 				// ignore quota / private mode
 			}
 		}
 
-		function clampPos(pos) {
-			const width = typeof window === "undefined" ? 1200 : window.innerWidth;
-			const height = typeof window === "undefined" ? 800 : window.innerHeight;
-			return {
-				left: Math.min(Math.max(MARGIN, pos.left), Math.max(MARGIN, width - BUBBLE - MARGIN)),
-				top: Math.min(Math.max(MARGIN, pos.top), Math.max(MARGIN, height - BUBBLE - MARGIN)),
+		function clampPos(pos, options) {
+			const { width, height } = viewport();
+			const dock = options && Object.prototype.hasOwnProperty.call(options, "dock")
+				? (isDockSide(options.dock) ? options.dock : null)
+				: (isDockSide(pos.dock) ? pos.dock : null);
+			const margin = options && typeof options.margin === "number" ? options.margin : (dock ? 0 : MARGIN);
+			const maxLeft = Math.max(margin, width - BUBBLE - margin);
+			const maxTop = Math.max(margin, height - BUBBLE - margin);
+			const next = {
+				left: Math.min(Math.max(margin, pos.left), maxLeft),
+				top: Math.min(Math.max(margin, pos.top), maxTop),
+				dock: dock,
 			};
+			if (dock === "left" || dock === "right" || dock === "top" || dock === "bottom") {
+				return dockedPos(next, dock);
+			}
+			return next;
+		}
+
+		function detectDock(pos) {
+			const { width, height } = viewport();
+			const dist = {
+				left: pos.left,
+				right: width - (pos.left + BUBBLE),
+				top: pos.top,
+				bottom: height - (pos.top + BUBBLE),
+			};
+			let side = null;
+			let best = Infinity;
+			const order = ["left", "right", "top", "bottom"];
+			for (let i = 0; i < order.length; i++) {
+				const key = order[i];
+				if (dist[key] <= DOCK_THRESHOLD && dist[key] < best) {
+					best = dist[key];
+					side = key;
+				}
+			}
+			return side;
+		}
+
+		function dockedPos(pos, side) {
+			const { width, height } = viewport();
+			const next = {
+				left: pos.left,
+				top: pos.top,
+				dock: side,
+			};
+			if (side === "left") next.left = 0;
+			else if (side === "right") next.left = Math.max(0, width - BUBBLE);
+			else if (side === "top") next.top = 0;
+			else if (side === "bottom") next.top = Math.max(0, height - BUBBLE);
+			if (side === "left" || side === "right") {
+				next.top = Math.min(Math.max(MARGIN, next.top), Math.max(MARGIN, height - BUBBLE - MARGIN));
+			} else if (side === "top" || side === "bottom") {
+				next.left = Math.min(Math.max(MARGIN, next.left), Math.max(MARGIN, width - BUBBLE - MARGIN));
+			}
+			return next;
+		}
+
+		function renderPos(pos, collapsed) {
+			if (!collapsed || !isDockSide(pos.dock)) {
+				return { left: pos.left, top: pos.top };
+			}
+			const shift = BUBBLE - PEEK;
+			if (pos.dock === "left") return { left: pos.left - shift, top: pos.top };
+			if (pos.dock === "right") return { left: pos.left + shift, top: pos.top };
+			if (pos.dock === "top") return { left: pos.left, top: pos.top - shift };
+			return { left: pos.left, top: pos.top + shift };
 		}
 
 		function useUsage(poll) {
@@ -399,8 +490,14 @@ window.__ModuleLoader__.load({
 			const [dragging, setDragging] = react.useState(false);
 			const [mounted, setMounted] = react.useState(false);
 			const [success, setSuccess] = react.useState(false);
+			const [expanded, setExpanded] = react.useState(false);
 			const drag = react.useRef(null);
 			const prevBusy = react.useRef(false);
+			const collapseTimer = react.useRef(null);
+			const hoverInside = react.useRef(false);
+			const rootRef = react.useRef(null);
+			const posRef = react.useRef(pos);
+			posRef.current = pos;
 
 			// Trigger the success glow when a manual refresh completes.
 			react.useEffect(() => {
@@ -420,10 +517,34 @@ window.__ModuleLoader__.load({
 			}, []);
 
 			react.useEffect(() => {
-				const onResize = () => setPos((current) => clampPos(current));
+				const onResize = () => setPos((current) => clampPos(current, {
+					dock: current.dock,
+					margin: current.dock ? 0 : MARGIN,
+				}));
 				window.addEventListener("resize", onResize);
 				return () => window.removeEventListener("resize", onResize);
 			}, []);
+
+			react.useEffect(() => {
+				return () => {
+					if (collapseTimer.current) clearTimeout(collapseTimer.current);
+				};
+			}, []);
+
+			const clearCollapseTimer = () => {
+				if (collapseTimer.current) {
+					clearTimeout(collapseTimer.current);
+					collapseTimer.current = null;
+				}
+			};
+
+			const scheduleCollapse = () => {
+				clearCollapseTimer();
+				collapseTimer.current = setTimeout(() => {
+					collapseTimer.current = null;
+					if (!hoverInside.current && !drag.current) setExpanded(false);
+				}, COLLAPSE_MS);
+			};
 
 			const accounts = (data && data.accounts) || [];
 			const primary = pickPrimaryModel(accounts);
@@ -440,8 +561,11 @@ window.__ModuleLoader__.load({
 			const dotTone = failed ? "danger" : (busy ? "warn" : "ok");
 			const isRefreshing = busy || isLoading;
 
-			const panelLeft = pos.left > (typeof window === "undefined" ? 600 : window.innerWidth / 2);
-			const panelTop = pos.top > (typeof window === "undefined" ? 400 : window.innerHeight / 2);
+			const collapsed = isDockSide(pos.dock) && !expanded && !dragging;
+			const shown = renderPos(pos, collapsed);
+			const { width: viewW, height: viewH } = viewport();
+			const panelLeft = pos.dock === "left" ? false : (pos.dock === "right" ? true : pos.left > viewW / 2);
+			const panelTop = pos.dock === "top" ? false : (pos.dock === "bottom" ? true : pos.top > viewH / 2);
 			const panelStyle = {
 				left: panelLeft ? "auto" : "0",
 				right: panelLeft ? "0" : "auto",
@@ -454,6 +578,8 @@ window.__ModuleLoader__.load({
 				if (event.button !== 0) return;
 				event.preventDefault();
 				event.currentTarget.setPointerCapture(event.pointerId);
+				clearCollapseTimer();
+				const wasCollapsed = isDockSide(pos.dock) && !expanded && !dragging;
 				drag.current = {
 					pointerId: event.pointerId,
 					startX: event.clientX,
@@ -461,20 +587,25 @@ window.__ModuleLoader__.load({
 					left: pos.left,
 					top: pos.top,
 					moved: false,
+					openedFromPeek: wasCollapsed,
 				};
-				setDragging(true);
+				setExpanded(true);
 			};
 
 			const onPointerMove = (event) => {
 				const state = drag.current;
 				if (!state || event.pointerId !== state.pointerId) return;
+				if (Math.abs(event.clientX - state.startX) > 3 || Math.abs(event.clientY - state.startY) > 3) {
+					state.moved = true;
+					setDragging(true);
+				}
+				if (!state.moved) return;
 				const next = clampPos({
 					left: state.left + (event.clientX - state.startX),
 					top: state.top + (event.clientY - state.startY),
-				});
-				if (Math.abs(event.clientX - state.startX) > 3 || Math.abs(event.clientY - state.startY) > 3) {
-					state.moved = true;
-				}
+					dock: null,
+				}, { dock: null, margin: 0 });
+				posRef.current = next;
 				setPos(next);
 			};
 
@@ -483,15 +614,57 @@ window.__ModuleLoader__.load({
 				if (!state || event.pointerId !== state.pointerId) return;
 				drag.current = null;
 				setDragging(false);
-				setPos((current) => {
-					const next = clampPos(current);
-					savePos(next);
-					return next;
-				});
-				if (!state.moved) {
+				const current = posRef.current;
+				const side = state.moved
+					? detectDock(current)
+					: (isDockSide(current.dock) ? current.dock : null);
+				const next = side
+					? dockedPos(current, side)
+					: clampPos(current, { dock: null, margin: MARGIN });
+				posRef.current = next;
+				savePos(next);
+				setPos(next);
+				const stillHovering = hoverInside.current;
+				if (isDockSide(next.dock)) {
+					if (state.openedFromPeek && !state.moved) {
+						setExpanded(true);
+					} else if (!stillHovering) {
+						if (finePointerHover()) scheduleCollapse();
+						else setExpanded(false);
+					}
+				} else {
+					clearCollapseTimer();
+					setExpanded(false);
+				}
+				if (!state.moved && !state.openedFromPeek) {
 					load(true);
 				}
 			};
+
+			const onMouseEnter = () => {
+				hoverInside.current = true;
+				clearCollapseTimer();
+				if (isDockSide(pos.dock)) setExpanded(true);
+			};
+
+			const onMouseLeave = () => {
+				hoverInside.current = false;
+				if (drag.current) return;
+				if (isDockSide(pos.dock)) scheduleCollapse();
+			};
+
+			react.useEffect(() => {
+				if (finePointerHover()) return undefined;
+				const onDocPointerDown = (event) => {
+					if (!isDockSide(pos.dock) || dragging) return;
+					const root = rootRef.current;
+					if (root && root.contains(event.target)) return;
+					hoverInside.current = false;
+					setExpanded(false);
+				};
+				document.addEventListener("pointerdown", onDocPointerDown);
+				return () => document.removeEventListener("pointerdown", onDocPointerDown);
+			}, [pos.dock, dragging]);
 
 			const core = busy
 				? createElement("span", { className: "mxu_spin", key: "spin" })
@@ -508,13 +681,18 @@ window.__ModuleLoader__.load({
 
 			const wrapper = createElement("div", {
 				className: "mxu_float" + (mounted ? "" : " mxu_pre"),
+				ref: rootRef,
 				"data-dragging": dragging ? "true" : undefined,
-				style: { left: pos.left + "px", top: pos.top + "px" },
+				"data-collapsed": collapsed ? "true" : undefined,
+				"data-dock": isDockSide(pos.dock) ? pos.dock : undefined,
+				style: { left: shown.left + "px", top: shown.top + "px" },
+				onMouseEnter,
+				onMouseLeave,
 			},
 				createElement("button", {
 					type: "button",
 					className: "mxu_bubble " + tone,
-					title: title + " · 悬停看详情 · 拖动换位置 · 点击刷新",
+					title: title + " · 悬停看详情 · 拖到边缘可收起 · 点击刷新",
 					"aria-label": title,
 					"data-busy": busy ? "true" : undefined,
 					"data-success": success ? "true" : undefined,
