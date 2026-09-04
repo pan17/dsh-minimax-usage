@@ -1,9 +1,10 @@
 /**
- * dsh-minimax-usage client half — draggable floating bubble on shell.overlay.
+ * dsh-minimax-usage client half — compact Token Plan quota indicator beside
+ * the conversation model selector.
  *
- * Authored directly in the DSH client module format (window.__ModuleLoader__),
- * the same delivery shape as dsh-wechat. Communicates with the host through
- * the plugin's own HTTP API (/minimax-usage/api/*).
+ * Authored directly in the DSH client module format (window.__ModuleLoader__).
+ * The Host half remains the source of truth for credentials, caching and
+ * refresh scheduling; this half reads only the plugin-owned JSON endpoints.
  */
 window.__ModuleLoader__.load({
 	id: "dsh-minimax-usage",
@@ -13,203 +14,69 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		const react = require("react");
 		const createElement = react.createElement;
-		// createPortal lives on react-dom, NOT on react. DeepSeek-pet uses the
-		// same require("react-dom") pattern (src/client/DeepSeekPet.jsx:482).
-		const reactDom = require("react-dom");
-		const createPortal = reactDom.createPortal;
 
+		// `slots` is the root service; `modelDirectories` is resolved in the
+		// session-scoped inject below so every composer observes its own model.
 		const inject = ["slots"];
 		const POLL_MS = 15000;
-		const POS_KEY = "dsh-minimax-usage.pos";
-		const BUBBLE = 64;
-		const RING = 56;
-		const STROKE = 4;
-		const RADIUS = (RING - STROKE) / 2;
-		const CIRCUM = 2 * Math.PI * RADIUS;
-		const MARGIN = 14;
-		const DOCK_THRESHOLD = 24;
-		const PEEK = 16;
-		const COLLAPSE_MS = 280;
-		const GRAD_ID = "mxu-ring-grad";
+		const REGION_LABEL = { global: "国际站", cn: "国内站" };
 
 		const css = [
-			// === root + draggable wrapper ===
-			".mxu_float{pointer-events:auto;position:fixed;z-index:50;width:" + BUBBLE + "px;height:" + BUBBLE + "px;animation:mxu_in .28s cubic-bezier(.2,.9,.3,1.2);transition:left .22s cubic-bezier(.2,.9,.3,1.1),top .22s cubic-bezier(.2,.9,.3,1.1)}",
-			".mxu_float.mxu_pre,.mxu_float[data-dragging=true]{transition:none}",
-			"@keyframes mxu_in{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}",
+			// === inline quota cell ===
+			".mxu_inline_host{display:inline-flex;position:relative;flex:none;align-items:center;height:28px;margin:0 2px;z-index:1}",
+			".mxu_inline{appearance:none;-webkit-appearance:none;display:inline-flex;align-items:center;justify-content:center;width:70px;min-height:28px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-secondary,#8b93a1);cursor:pointer;font:inherit;line-height:1;user-select:none;transition:background .14s ease,opacity .14s ease,transform .14s ease}",
+			".mxu_inline:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.12))}",
+			".mxu_inline:focus-visible{outline:none;box-shadow:0 0 0 2px var(--dsw-alias-border-l3,#8ea3ff)}",
+			".mxu_inline:active{transform:scale(.98)}",
+			".mxu_inline[data-busy=true]{background:color-mix(in srgb,#818cf8 12%,transparent)}",
+			".mxu_inline_rows{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:70px}",
+			".mxu_inline_line{display:inline-flex;align-items:center;gap:4px;width:70px;height:6px}",
+			".mxu_inline_label{display:inline-block;width:18px;color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:9px;font-weight:600;line-height:10px;text-align:right;letter-spacing:.01em}",
+			".mxu_inline_track{display:block;width:48px;height:6px;border-radius:999px;background:var(--dsw-alias-border-l2,rgba(128,128,128,.28));overflow:hidden}",
+			".mxu_inline_fill{display:block;height:100%;min-width:0;border-radius:inherit;transition:width .45s cubic-bezier(.3,.7,.4,1),background-color .2s ease}",
+			".mxu_inline_fill.ok{background:var(--dsw-alias-state-success-primary,#22c55e)}",
+			".mxu_inline_fill.warn{background:var(--dsw-alias-state-warn-primary,#f59e0b)}",
+			".mxu_inline_fill.danger{background:var(--dsw-alias-state-error-primary,#ef4444)}",
+			".mxu_inline_fill.muted{background:var(--dsw-alias-label-tertiary,#64748b);opacity:.55}",
+			".mxu_inline_fill.loading{width:55%;background:linear-gradient(90deg,#7c8cff,#a5b4fc,#7c8cff);background-size:200% 100%;animation:mxu_inline_loading 1.4s ease-in-out infinite}",
+			"@keyframes mxu_inline_loading{0%{background-position:100% 0;opacity:.42}50%{opacity:.9}100%{background-position:0 0;opacity:.42}}",
 
-			// === bubble shell ===
-			".mxu_bubble{position:relative;width:" + BUBBLE + "px;height:" + BUBBLE + "px;padding:0;border:0;border-radius:50%;cursor:grab;display:grid;place-items:center;user-select:none;touch-action:none;isolation:isolate;",
-			// light-first surface: layer-1 is white in light theme (overlay is gray-blue and looked dirty)
-			"background:radial-gradient(120% 120% at 28% 22%,color-mix(in srgb,var(--mxu-tone) 12%,var(--dsw-alias-bg-layer-1,#fff)) 0%,var(--dsw-alias-bg-layer-1,#fff) 72%);",
-			// 1px rim + inner sheen only — no outer drop/glow, no dark wash
-			"box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72);",
-			"backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);",
-			"transition:transform .22s cubic-bezier(.2,.9,.3,1.2),box-shadow .22s ease}",
-			"body[data-ds-dark-theme] .mxu_bubble{background:radial-gradient(120% 120% at 28% 22%,color-mix(in srgb,var(--mxu-tone) 16%,var(--dsw-alias-bg-overlay,#16181d)) 0%,var(--dsw-alias-bg-overlay,#16181d) 58%,color-mix(in srgb,#000 22%,var(--dsw-alias-bg-overlay,#16181d)) 100%);",
-			"box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 18%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}",
-			// top sheen pseudo-element (cleaner than nested divs)
-			".mxu_bubble::before{content:\"\";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(160deg,rgba(255,255,255,.42) 0%,rgba(255,255,255,0) 42%);pointer-events:none}",
-			"body[data-ds-dark-theme] .mxu_bubble::before{background:linear-gradient(160deg,rgba(255,255,255,.10) 0%,rgba(255,255,255,0) 38%);mix-blend-mode:screen}",
-			// micro inner ring under the SVG ring for crisp edge
-			".mxu_bubble::after{content:\"\";position:absolute;inset:2px;border-radius:inherit;border:1px solid color-mix(in srgb,var(--dsw-alias-label-primary,#000) 8%,transparent);mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);mask-composite:exclude;-webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;pointer-events:none}",
-
-			// === hover / drag / focus ===
-			".mxu_bubble:hover{transform:scale(1.06);box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 42%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.8)}",
-			"body[data-ds-dark-theme] .mxu_bubble:hover{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 32%,transparent),inset 0 1px 0 rgba(255,255,255,.14)}",
-			".mxu_bubble:active{cursor:grabbing}",
-			".mxu_float[data-dragging=true] .mxu_bubble{cursor:grabbing;transform:scale(1.10);transition:none;box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 48%,var(--dsw-alias-border-l2,#cfd3d6))}",
-			"body[data-ds-dark-theme] .mxu_float[data-dragging=true] .mxu_bubble{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 38%,transparent)}",
-			".mxu_float[data-collapsed=true] .mxu_bubble:hover{transform:none}",
-
-			// === ring (SVG) ===
-			".mxu_ring{position:absolute;inset:4px;width:" + RING + "px;height:" + RING + "px;transform:rotate(-90deg);overflow:visible}",
-			".mxu_ring_track{fill:none;stroke:color-mix(in srgb,var(--mxu-tone) 18%,transparent);stroke-width:" + STROKE + "}",
-			".mxu_ring_value{fill:none;stroke:url(#" + GRAD_ID + ");stroke-width:" + STROKE + ";stroke-linecap:round;",
-			"transition:stroke-dashoffset .55s cubic-bezier(.3,.7,.4,1),stroke .3s ease}",
-
-			// === core (center content) ===
-			".mxu_core{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;line-height:1}",
-			".mxu_pct{font-size:14px;font-weight:700;letter-spacing:-.045em;font-variant-numeric:tabular-nums;display:inline-flex;align-items:baseline;color:var(--dsw-alias-label-primary,#f4f6f9)}",
-			".mxu_pct em{font-style:normal;font-size:8.5px;font-weight:600;opacity:.62;margin-left:1px;align-self:flex-start;margin-top:1.5px}",
-			".mxu_pct_dash{font-size:16px;font-weight:700;opacity:.7;letter-spacing:0}",
-			".mxu_pct_err{font-size:18px;font-weight:800;line-height:1;color:var(--dsw-alias-state-error-primary,#ef5b5b);filter:drop-shadow(0 0 6px color-mix(in srgb,var(--dsw-alias-state-error-primary,#ef5b5b) 50%,transparent))}",
-			".mxu_tag{display:inline-flex;align-items:center;gap:3px;margin-top:2px;font-size:8.5px;font-weight:650;letter-spacing:.14em;text-transform:uppercase;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 90%,transparent)}",
-			".mxu_tag::before{content:\"\";width:4px;height:4px;border-radius:50%;background:var(--mxu-tone);box-shadow:0 0 6px var(--mxu-tone);opacity:.85}",
-
-			// === tones (bubble + bar + dot share these) ===
-			".mxu_bubble.ok{--mxu-tone:#10b981;--mxu-tone-2:#34d399;--mxu-tone-soft:rgba(16,185,129,.12)}",
-			".mxu_bubble.warn{--mxu-tone:#f59e0b;--mxu-tone-2:#fbbf24;--mxu-tone-soft:rgba(245,158,11,.12)}",
-			".mxu_bubble.danger{--mxu-tone:#f43f5e;--mxu-tone-2:#fb7185;--mxu-tone-soft:rgba(244,63,94,.12)}",
-			".mxu_bubble.muted{--mxu-tone:#64748b;--mxu-tone-2:#94a3b8;--mxu-tone-soft:rgba(100,116,139,.12)}",
-			".mxu_bubble.loading{--mxu-tone:#7c8cff;--mxu-tone-2:#a5b4fc;--mxu-tone-soft:rgba(124,140,255,.12);animation:mxu_pulse 2s ease-in-out infinite}",
-			"@keyframes mxu_pulse{0%,100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}50%{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 52%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}}",
-
-			// === spinner (loading) ===
-			".mxu_spin{width:18px;height:18px;border-radius:50%;position:relative}",
-			".mxu_spin::before,.mxu_spin::after{content:\"\";position:absolute;inset:0;border-radius:50%;border:2px solid transparent}",
-			".mxu_spin::before{border-top-color:var(--mxu-tone);border-right-color:color-mix(in srgb,var(--mxu-tone) 60%,transparent);animation:mxu_spin .9s cubic-bezier(.5,.1,.5,.9) infinite}",
-			".mxu_spin::after{border:1px solid color-mix(in srgb,var(--mxu-tone) 20%,transparent);inset:-3px}",
-			"@keyframes mxu_spin{to{transform:rotate(360deg)}}",
-
-			// === panel (hover detail) ===
-			".mxu_panel{pointer-events:none;position:absolute;width:296px;padding:14px 15px 12px;border-radius:18px;",
-			"background:linear-gradient(180deg,color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 94%,transparent),color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 88%,transparent));",
-			"color:var(--dsw-alias-label-primary,#e8eaed);",
-			// gradient border via mask-composite
-			"border:1px solid transparent;",
-			"background-clip:padding-box;",
-			"box-shadow:0 24px 64px rgba(0,0,0,.42),0 1px 0 rgba(255,255,255,.04) inset;",
-			"backdrop-filter:blur(28px) saturate(1.35);-webkit-backdrop-filter:blur(28px) saturate(1.35);",
-			"opacity:0;transform:translateY(8px) scale(.96);transform-origin:bottom right;",
-			"transition:opacity .18s cubic-bezier(.2,.9,.3,1.1),transform .18s cubic-bezier(.2,.9,.3,1.1);",
-			// pseudo border for gradient effect
-			"}",
-			".mxu_panel::before{content:\"\";position:absolute;inset:0;border-radius:inherit;padding:1px;background:linear-gradient(140deg,color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 50%,transparent),color-mix(in srgb,var(--mxu-tone,#7c8cff) 28%,transparent) 50%,color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 18%,transparent));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;opacity:.85}",
-			".mxu_float:hover .mxu_panel,.mxu_float:focus-within .mxu_panel{opacity:1;transform:none}",
-			".mxu_float[data-dragging=true] .mxu_panel,.mxu_float[data-collapsed=true] .mxu_panel{opacity:0;pointer-events:none}",
-
-			// === header ===
-			".mxu_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:11px}",
-			".mxu_brand{display:flex;align-items:center;gap:8px}",
-			".mxu_logo{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--mxu-tone,#7c8cff),color-mix(in srgb,var(--mxu-tone,#7c8cff) 50%,#fff));display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;box-shadow:0 4px 10px color-mix(in srgb,var(--mxu-tone,#7c8cff) 45%,transparent),inset 0 1px 0 rgba(255,255,255,.3)}",
-			".mxu_title{font-size:13px;font-weight:700;letter-spacing:-.015em}",
-			".mxu_sub{font-size:10.5px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent);margin-top:1px}",
-			".mxu_live{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:550;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent);white-space:nowrap;padding-top:2px}",
-			".mxu_dot{width:7px;height:7px;border-radius:50%;background:var(--mxu-tone);box-shadow:0 0 0 3px color-mix(in srgb,var(--mxu-tone) 18%,transparent),0 0 8px var(--mxu-tone);animation:mxu_blink 2.4s ease-in-out infinite}",
-			".mxu_dot.warn{background:var(--dsw-alias-state-warn-primary,#f59e0b);box-shadow:0 0 0 3px color-mix(in srgb,#f59e0b 18%,transparent),0 0 8px #f59e0b}",
-			".mxu_dot.danger{background:#f43f5e;box-shadow:0 0 0 3px color-mix(in srgb,#f43f5e 18%,transparent),0 0 8px #f43f5e}",
-			"@keyframes mxu_blink{0%,100%{opacity:1}50%{opacity:.55}}",
-
-			// === error / empty ===
-			".mxu_err{display:flex;gap:6px;align-items:flex-start;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,#f43f5e 12%,transparent);border:1px solid color-mix(in srgb,#f43f5e 22%,transparent);color:#fda4af;font-size:11px;line-height:1.5;margin:0 0 10px}",
-			".mxu_err::before{content:\"⚠\";font-size:11px;line-height:1;margin-top:1px;flex:none}",
-			".mxu_empty{padding:18px 4px;text-align:center;font-size:11px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent)}",
-			".mxu_empty .mxu_spin{display:inline-block;margin-bottom:8px}",
-
-			// === account card ===
-			".mxu_acc{position:relative;padding:9px 11px 10px 14px;margin-top:8px;border-radius:12px;background:color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 50%,transparent);",
-			"border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 8%,transparent);transition:background .18s ease,border-color .18s ease}",
-			".mxu_acc:first-of-type{margin-top:0}",
-			".mxu_acc:hover{background:color-mix(in srgb,var(--dsw-alias-bg-overlay,#16181d) 70%,transparent);border-color:color-mix(in srgb,var(--mxu-tone,#7c8cff) 22%,transparent)}",
-			// left accent stripe
-			".mxu_acc::before{content:\"\";position:absolute;left:4px;top:10px;bottom:10px;width:2.5px;border-radius:2px;background:linear-gradient(180deg,var(--mxu-tone,#7c8cff),color-mix(in srgb,var(--mxu-tone,#7c8cff) 30%,transparent));box-shadow:0 0 8px color-mix(in srgb,var(--mxu-tone,#7c8cff) 50%,transparent)}",
-			".mxu_acc.ok{--mxu-tone:#10b981}",
-			".mxu_acc.warn{--mxu-tone:#f59e0b}",
-			".mxu_acc.danger{--mxu-tone:#f43f5e}",
-			".mxu_acc.muted{--mxu-tone:#64748b}",
-			".mxu_acc.loading{--mxu-tone:#7c8cff}",
-			".mxu_acc_head{display:flex;align-items:center;gap:6px;margin-bottom:8px}",
-			".mxu_chip{font-size:9.5px;font-weight:700;padding:2.5px 7px;border-radius:999px;background:color-mix(in srgb,var(--mxu-tone,#7c8cff) 14%,transparent);color:var(--mxu-tone,#7c8cff);letter-spacing:.02em}",
-			".mxu_acc_name{font-size:12px;font-weight:650;letter-spacing:-.005em;display:flex;align-items:center;gap:6px}",
-			".mxu_stale{font-size:9px;font-weight:600;padding:1px 5px;border-radius:4px;background:color-mix(in srgb,#f59e0b 14%,transparent);color:#fbbf24;letter-spacing:.02em}",
-
-			// === model rows ===
-			".mxu_model{margin-bottom:9px}",
-			".mxu_model:last-child{margin-bottom:0}",
-			".mxu_model_name{font-size:10.5px;font-weight:650;margin-bottom:6px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 88%,transparent);letter-spacing:.01em;text-transform:uppercase}",
-			".mxu_row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;margin-bottom:4px}",
-			".mxu_row span{color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 92%,transparent)}",
-			".mxu_row b{font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.01em;color:var(--dsw-alias-label-primary,#f4f6f9)}",
-
-			// === bar ===
-			".mxu_bar{position:relative;height:5px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-label-secondary,#888) 14%,transparent);overflow:hidden;margin-bottom:9px}",
-			".mxu_bar:last-child{margin-bottom:0}",
-			".mxu_bar_fill{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--mxu-tone),var(--mxu-tone-2,var(--mxu-tone)));position:relative;overflow:hidden;transition:width .5s cubic-bezier(.3,.7,.4,1)}",
-			".mxu_bar_fill::after{content:\"\";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);transform:translateX(-100%);animation:mxu_shimmer 2.2s ease-in-out infinite}",
-			"@keyframes mxu_shimmer{0%{transform:translateX(-100%)}60%,100%{transform:translateX(120%)}}",
-			".mxu_bar.ok{--mxu-tone:#10b981;--mxu-tone-2:#34d399}",
-			".mxu_bar.warn{--mxu-tone:#f59e0b;--mxu-tone-2:#fbbf24}",
-			".mxu_bar.danger{--mxu-tone:#f43f5e;--mxu-tone-2:#fb7185}",
-			".mxu_bar.muted{--mxu-tone:#64748b;--mxu-tone-2:#94a3b8}",
-			".mxu_bar.dim{opacity:.55}",
-
-			// === hint footer ===
-			".mxu_hint{margin-top:10px;padding-top:9px;border-top:1px dashed color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 14%,transparent);font-size:10px;color:color-mix(in srgb,var(--dsw-alias-label-secondary,#8b93a1) 86%,transparent);line-height:1.55;display:flex;align-items:center;gap:6px}",
-			".mxu_hint::before{content:\"\";width:5px;height:5px;border-radius:50%;background:var(--mxu-tone,#7c8cff);flex:none;opacity:.7}",
-
-			// === refresh feedback (manual click on the bubble) ===
-			// Vibrant indigo tone + glow while busy, regardless of underlying data tone.
-			".mxu_bubble[data-busy=\"true\"] .mxu_spin::before{border-top-color:#818cf8;border-right-color:color-mix(in srgb,#818cf8 60%,transparent)}",
-			".mxu_bubble[data-busy=\"true\"] .mxu_spin::after{border:1px solid color-mix(in srgb,#818cf8 28%,transparent)}",
-			".mxu_bubble[data-busy=\"true\"]{box-shadow:0 0 0 1px color-mix(in srgb,#818cf8 42%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}",
-			"body[data-ds-dark-theme] .mxu_bubble[data-busy=\"true\"]{box-shadow:0 0 0 1px color-mix(in srgb,#818cf8 32%,transparent),inset 0 1px 0 rgba(255,255,255,.10),inset 0 -1px 0 rgba(0,0,0,.18)}",
-			".mxu_bubble[data-busy=\"true\"]::before{background:linear-gradient(160deg,rgba(129,140,248,.20) 0%,rgba(129,140,248,0) 40%)}",
-
-			// Brief green pulse on successful refresh completion.
-			".mxu_bubble[data-success=\"true\"]{animation:mxu_success_glow .9s cubic-bezier(.2,.9,.3,1.2)}",
-			"@keyframes mxu_success_glow{0%{box-shadow:0 0 0 1px color-mix(in srgb,#10b981 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}35%{box-shadow:0 0 0 2px color-mix(in srgb,#10b981 55%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.85)}100%{box-shadow:0 0 0 1px color-mix(in srgb,var(--mxu-tone) 28%,var(--dsw-alias-border-l2,#cfd3d6)),inset 0 1px 0 rgba(255,255,255,.72)}}",
-
-			// Live label switches to the refreshing tone and the dot pulses faster.
-			".mxu_live.refreshing{color:var(--mxu-tone,#818cf8)}",
-			".mxu_live.refreshing .mxu_dot{animation:mxu_dot_blink .7s ease-in-out infinite}",
-			"@keyframes mxu_dot_blink{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.82)}}",
-
-			// Tiny inline spinner that can sit next to the live label.
-			".mxu_inline_spin{display:inline-block;width:9px;height:9px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--mxu-tone,#818cf8) 28%,transparent);border-top-color:var(--mxu-tone,#818cf8);animation:mxu_spin .8s linear infinite;margin-left:3px;vertical-align:-1px}",
-
-			// Top-of-panel shimmer bar visible only during refresh.
-			".mxu_panel_refresh{position:absolute;top:0;left:14px;right:14px;height:2px;border-radius:0 0 2px 2px;background:linear-gradient(90deg,transparent 0%,var(--mxu-tone,#818cf8) 50%,transparent 100%);opacity:0;transform:translateX(-100%);transition:opacity .2s ease;pointer-events:none}",
-			".mxu_panel_refresh.busy{opacity:.9;animation:mxu_panel_shimmer 1.1s cubic-bezier(.4,0,.6,1) infinite}",
-			"@keyframes mxu_panel_shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}",
-
-			// Slightly more energetic empty-state when a manual refresh is mid-flight.
-			".mxu_empty.refreshing .mxu_spin{border-top-color:var(--mxu-tone,#818cf8);border-right-color:color-mix(in srgb,#818cf8 60%,transparent)}",
-			".mxu_empty.refreshing div{color:color-mix(in srgb,var(--mxu-tone,#818cf8) 35%,var(--dsw-alias-label-secondary,#8b93a1))}",
+			// === compact tooltip ===
+			".mxu_inline_tip{pointer-events:none;position:absolute;right:0;bottom:calc(100% + 7px);width:296px;box-sizing:border-box;padding:12px 13px 10px;border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 18%,transparent);border-radius:13px;background:var(--dsw-alias-bg-overlay,#16181d);color:var(--dsw-alias-label-primary,#e8eaed);box-shadow:0 14px 34px rgba(0,0,0,.28);z-index:1000;line-height:1.35}",
+			".mxu_inline_tip_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}",
+			".mxu_inline_tip_title{font-size:12px;font-weight:700;letter-spacing:-.01em}",
+			".mxu_inline_tip_sub{margin-top:2px;color:var(--dsw-alias-label-secondary,#8b93a1);font-size:10px}",
+			".mxu_inline_tip_live{color:var(--dsw-alias-label-secondary,#8b93a1);font-size:10px;white-space:nowrap}",
+			".mxu_inline_tip_error{margin:0 0 8px;padding:6px 8px;border-radius:8px;background:color-mix(in srgb,#f43f5e 13%,transparent);color:#fda4af;font-size:10px;line-height:1.45}",
+			".mxu_inline_tip_empty{padding:8px 2px;color:var(--dsw-alias-label-secondary,#8b93a1);font-size:10px;text-align:center}",
+			".mxu_inline_account{margin-top:7px;padding:8px 9px;border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-bg-layer-1,#fff) 7%,transparent);border:1px solid color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 9%,transparent)}",
+			".mxu_inline_account:first-of-type{margin-top:0}",
+			".mxu_inline_account_selected{border-color:color-mix(in srgb,#818cf8 38%,transparent)}",
+			".mxu_inline_account_head{display:flex;align-items:center;gap:6px;margin-bottom:6px}",
+			".mxu_inline_chip{padding:2px 6px;border-radius:999px;background:color-mix(in srgb,#818cf8 16%,transparent);color:#a5b4fc;font-size:9px;font-weight:700}",
+			".mxu_inline_account_name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px;font-weight:650}",
+			".mxu_inline_stale{margin-left:auto;color:#fbbf24;font-size:9px;white-space:nowrap}",
+			".mxu_inline_account_error{margin:0 0 6px;color:#fda4af;font-size:10px;line-height:1.4}",
+			".mxu_inline_model{margin-top:6px}",
+			".mxu_inline_model:first-of-type{margin-top:0}",
+			".mxu_inline_model_name{margin-bottom:4px;color:var(--dsw-alias-label-secondary,#8b93a1);font-size:9.5px;font-weight:650;text-transform:uppercase;letter-spacing:.02em}",
+			".mxu_inline_metric{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:2px;color:var(--dsw-alias-label-secondary,#8b93a1);font-size:10px}",
+			".mxu_inline_metric b{color:var(--dsw-alias-label-primary,#f4f6f9);font-size:10px;font-weight:700;font-variant-numeric:tabular-nums}",
+			".mxu_inline_hint{margin-top:8px;padding-top:7px;border-top:1px dashed color-mix(in srgb,var(--dsw-alias-border-l1,#fff) 14%,transparent);color:var(--dsw-alias-label-tertiary,#8b93a1);font-size:9.5px;line-height:1.45}",
 		].join("");
 
-		if (typeof document !== "undefined" && document.querySelector('style[data-plugin-css="dsh-minimax-usage"]') === null) {
-			const tag = document.createElement("style");
-			tag.dataset.plugin = "dsh-minimax-usage";
-			tag.dataset.pluginCss = "dsh-minimax-usage";
-			tag.textContent = css;
-			document.head.appendChild(tag);
-		} else if (typeof document !== "undefined") {
+		if (typeof document !== "undefined") {
 			const existing = document.querySelector('style[data-plugin-css="dsh-minimax-usage"]');
-			if (existing) existing.textContent = css;
+			if (existing) {
+				existing.textContent = css;
+			} else {
+				const tag = document.createElement("style");
+				tag.dataset.plugin = "dsh-minimax-usage";
+				tag.dataset.pluginCss = "dsh-minimax-usage";
+				tag.textContent = css;
+				document.head.appendChild(tag);
+			}
 		}
-
-		const REGION_LABEL = { global: "国际站", cn: "国内站" };
 
 		function api(path, options) {
 			return fetch("/minimax-usage/api" + path, {
@@ -222,16 +89,22 @@ window.__ModuleLoader__.load({
 			}));
 		}
 
+		function minimaxRegion(provider) {
+			if (provider === "minimax-cn") return "cn";
+			if (provider === "minimax") return "global";
+			return undefined;
+		}
+
 		function toneOf(percent) {
-			if (percent === undefined || percent === null || Number.isNaN(percent)) return "muted";
-			if (percent < 10) return "danger";
-			if (percent < 30) return "warn";
+			if (typeof percent !== "number" || Number.isNaN(percent)) return "muted";
+			if (percent < 20) return "danger";
+			if (percent < 50) return "warn";
 			return "ok";
 		}
 
 		function formatPercent(percent) {
-			if (percent === undefined || percent === null || Number.isNaN(percent)) return "—";
-			return Math.round(percent);
+			if (typeof percent !== "number" || Number.isNaN(percent)) return "—";
+			return Math.round(percent) + "%";
 		}
 
 		function formatCountdown(endAt) {
@@ -257,524 +130,216 @@ window.__ModuleLoader__.load({
 			}
 		}
 
-		function pickPrimaryModel(accounts) {
-			for (const account of accounts || []) {
-				if (!account || !account.ok || !account.models) continue;
-				const general = account.models.find((m) => m.included !== false && String(m.name).toLowerCase() === "general");
-				const first = account.models.find((m) => m.included !== false) || account.models[0];
-				const model = general || first;
-				if (model) return { account, model };
-			}
-			return null;
+		function accountForSelection(accounts, region, modelId) {
+			const account = (accounts || []).find((item) => item && item.region === region);
+			if (!account) return { account: undefined, model: undefined };
+			const wanted = typeof modelId === "string" ? modelId.toLowerCase() : "";
+			const exact = wanted
+				? (account.models || []).find((item) => item && String(item.name).toLowerCase() === wanted)
+				: undefined;
+			const fallback = (account.models || []).find((item) => item && item.included !== false) || (account.models || [])[0];
+			return { account, model: exact || fallback };
 		}
 
-		function viewport() {
-			return {
-				width: typeof window === "undefined" ? 1200 : window.innerWidth,
-				height: typeof window === "undefined" ? 800 : window.innerHeight,
-			};
-		}
-
-		function isDockSide(value) {
-			return value === "left" || value === "right" || value === "top" || value === "bottom";
-		}
-
-		function finePointerHover() {
-			if (typeof window === "undefined" || typeof window.matchMedia !== "function") return true;
-			return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
-		}
-
-		function defaultPos() {
-			const { width, height } = viewport();
-			return {
-				left: Math.max(MARGIN, width - BUBBLE - 36),
-				top: Math.max(MARGIN, height - BUBBLE - 96),
-				dock: null,
-			};
-		}
-
-		function loadPos() {
-			try {
-				const raw = localStorage.getItem(POS_KEY);
-				if (!raw) return defaultPos();
-				const parsed = JSON.parse(raw);
-				if (typeof parsed.left !== "number" || typeof parsed.top !== "number") return defaultPos();
-				const dock = isDockSide(parsed.dock) ? parsed.dock : null;
-				return clampPos({ left: parsed.left, top: parsed.top, dock }, { dock, margin: dock ? 0 : MARGIN });
-			} catch {
-				return defaultPos();
-			}
-		}
-
-		function savePos(pos) {
-			try {
-				localStorage.setItem(POS_KEY, JSON.stringify({
-					left: pos.left,
-					top: pos.top,
-					dock: isDockSide(pos.dock) ? pos.dock : null,
-				}));
-			} catch {
-				// ignore quota / private mode
-			}
-		}
-
-		function clampPos(pos, options) {
-			const { width, height } = viewport();
-			const dock = options && Object.prototype.hasOwnProperty.call(options, "dock")
-				? (isDockSide(options.dock) ? options.dock : null)
-				: (isDockSide(pos.dock) ? pos.dock : null);
-			const margin = options && typeof options.margin === "number" ? options.margin : (dock ? 0 : MARGIN);
-			const maxLeft = Math.max(margin, width - BUBBLE - margin);
-			const maxTop = Math.max(margin, height - BUBBLE - margin);
-			const next = {
-				left: Math.min(Math.max(margin, pos.left), maxLeft),
-				top: Math.min(Math.max(margin, pos.top), maxTop),
-				dock: dock,
-			};
-			if (dock === "left" || dock === "right" || dock === "top" || dock === "bottom") {
-				return dockedPos(next, dock);
-			}
-			return next;
-		}
-
-		function detectDock(pos) {
-			const { width, height } = viewport();
-			const dist = {
-				left: pos.left,
-				right: width - (pos.left + BUBBLE),
-				top: pos.top,
-				bottom: height - (pos.top + BUBBLE),
-			};
-			let side = null;
-			let best = Infinity;
-			const order = ["left", "right", "top", "bottom"];
-			for (let i = 0; i < order.length; i++) {
-				const key = order[i];
-				if (dist[key] <= DOCK_THRESHOLD && dist[key] < best) {
-					best = dist[key];
-					side = key;
-				}
-			}
-			return side;
-		}
-
-		function dockedPos(pos, side) {
-			const { width, height } = viewport();
-			const next = {
-				left: pos.left,
-				top: pos.top,
-				dock: side,
-			};
-			if (side === "left") next.left = 0;
-			else if (side === "right") next.left = Math.max(0, width - BUBBLE);
-			else if (side === "top") next.top = 0;
-			else if (side === "bottom") next.top = Math.max(0, height - BUBBLE);
-			if (side === "left" || side === "right") {
-				next.top = Math.min(Math.max(MARGIN, next.top), Math.max(MARGIN, height - BUBBLE - MARGIN));
-			} else if (side === "top" || side === "bottom") {
-				next.left = Math.min(Math.max(MARGIN, next.left), Math.max(MARGIN, width - BUBBLE - MARGIN));
-			}
-			return next;
-		}
-
-		function renderPos(pos, collapsed) {
-			if (!collapsed || !isDockSide(pos.dock)) {
-				return { left: pos.left, top: pos.top };
-			}
-			const shift = BUBBLE - PEEK;
-			if (pos.dock === "left") return { left: pos.left - shift, top: pos.top };
-			if (pos.dock === "right") return { left: pos.left + shift, top: pos.top };
-			if (pos.dock === "top") return { left: pos.left, top: pos.top - shift };
-			return { left: pos.left, top: pos.top + shift };
-		}
-
-		function useUsage(poll) {
+		function useUsage(enabled, region) {
 			const [data, setData] = react.useState(null);
 			const [busy, setBusy] = react.useState(false);
 			const [tick, setTick] = react.useState(0);
+			const requestSeq = react.useRef(0);
 
 			const load = react.useCallback((force) => {
+				if (!enabled) return Promise.resolve();
+				const seq = ++requestSeq.current;
 				if (force) setBusy(true);
 				return api(force ? "/refresh" : "/status", force ? { method: "POST" } : undefined)
-					.then((r) => {
-						if (r.body && typeof r.body === "object") setData(r.body);
+					.then((response) => {
+						if (seq !== requestSeq.current || !enabled) return;
+						if (response.body && typeof response.body === "object") setData(response.body);
 					})
 					.catch(() => {})
-					.finally(() => { if (force) setBusy(false); });
-			}, []);
+					.finally(() => {
+						if (seq === requestSeq.current && force) setBusy(false);
+					});
+			}, [enabled, region]);
 
 			react.useEffect(() => {
+				++requestSeq.current;
+				if (!enabled) {
+					setData(null);
+					setBusy(false);
+					return undefined;
+				}
 				load(false);
-			}, [load]);
+				return () => { ++requestSeq.current; };
+			}, [enabled, region, load]);
 
 			react.useEffect(() => {
-				if (!poll) return undefined;
+				if (!enabled) return undefined;
 				const id = setInterval(() => load(false), POLL_MS);
-				const onVis = () => {
-					if (document.visibilityState === "visible") load(false);
-				};
-				document.addEventListener("visibilitychange", onVis);
-				return () => {
-					clearInterval(id);
-					document.removeEventListener("visibilitychange", onVis);
-				};
-			}, [poll, load]);
+				return () => clearInterval(id);
+			}, [enabled, region, load]);
 
 			react.useEffect(() => {
-				const id = setInterval(() => setTick((n) => n + 1), 30000);
+				if (!enabled) return undefined;
+				const id = setInterval(() => setTick((value) => value + 1), 30000);
 				return () => clearInterval(id);
-			}, []);
+			}, [enabled]);
 
 			return { data, busy, load, tick };
 		}
 
-		function Ring(props) {
-			const raw = typeof props.percent === "number" && !Number.isNaN(props.percent) ? props.percent : 0;
-			const offset = CIRCUM * (1 - Math.max(0, Math.min(100, raw)) / 100);
-			return createElement("svg", {
-				className: "mxu_ring",
-				viewBox: "0 0 " + RING + " " + RING,
-				"aria-hidden": "true",
-			},
-				createElement("defs", null,
-					createElement("linearGradient", { id: GRAD_ID, x1: "0%", y1: "0%", x2: "100%", y2: "100%" },
-						createElement("stop", { offset: "0%", style: { stopColor: "var(--mxu-tone)" } }),
-						createElement("stop", { offset: "100%", style: { stopColor: "var(--mxu-tone-2)" } }),
+		function CompactQuotaLine(props) {
+			const percent = typeof props.percent === "number" && !Number.isNaN(props.percent)
+				? Math.max(0, Math.min(100, props.percent))
+				: undefined;
+			const tone = props.loading ? "muted" : (props.included === false ? "muted" : toneOf(percent));
+			const fillClass = "mxu_inline_fill " + (props.loading ? "loading" : tone);
+			const width = props.loading ? undefined : (props.included === false || percent === undefined ? "0%" : percent + "%");
+			return createElement("span", { className: "mxu_inline_line", "aria-hidden": "true" },
+				createElement("span", { className: "mxu_inline_label" }, props.label),
+				createElement("span", { className: "mxu_inline_track" },
+					createElement("span", { className: fillClass, style: width === undefined ? undefined : { width } }),
+				),
+			);
+		}
+
+		function detailMetric(label, percent, included, reset) {
+			const value = included === false ? "未包含" : formatPercent(percent);
+			return createElement("div", { className: "mxu_inline_metric" },
+				createElement("span", null, label + (reset ? " · " + reset : "")),
+				createElement("b", null, value),
+			);
+		}
+
+		function DetailPanel(props) {
+			const accounts = Array.isArray(props.accounts) ? props.accounts : [];
+			const data = props.data;
+			const loading = !data || data.phase === "init";
+			return createElement("div", { className: "mxu_inline_tip", role: "tooltip", id: props.id },
+				createElement("div", { className: "mxu_inline_tip_head" },
+					createElement("div", null,
+						createElement("div", { className: "mxu_inline_tip_title" }, "MiniMax Token Plan"),
+						createElement("div", { className: "mxu_inline_tip_sub" }, REGION_LABEL[props.region] || "MiniMax"),
+					),
+					createElement("span", { className: "mxu_inline_tip_live" },
+						props.busy ? "刷新中…" : (loading ? "读取中…" : (data.fetchedAt ? "更新于 " + formatFetchedAt(data.fetchedAt) : "")),
 					),
 				),
-				createElement("circle", {
-					className: "mxu_ring_track",
-					cx: RING / 2,
-					cy: RING / 2,
-					r: RADIUS,
-				}),
-				createElement("circle", {
-					className: "mxu_ring_value",
-					cx: RING / 2,
-					cy: RING / 2,
-					r: RADIUS,
-					strokeDasharray: String(CIRCUM),
-					strokeDashoffset: String(offset),
-				}),
+				data && data.error ? createElement("div", { className: "mxu_inline_tip_error" }, data.error) : null,
+				loading && accounts.length === 0
+					? createElement("div", { className: "mxu_inline_tip_empty" }, props.busy ? "正在刷新用量…" : "正在读取用量…")
+					: null,
+				accounts.map((account) => createElement("div", {
+					className: "mxu_inline_account" + (account.region === props.region ? " mxu_inline_account_selected" : ""),
+					key: account.region,
+				},
+					createElement("div", { className: "mxu_inline_account_head" },
+						createElement("span", { className: "mxu_inline_chip" }, REGION_LABEL[account.region] || account.region),
+						createElement("span", { className: "mxu_inline_account_name" }, account.planName || "订阅套餐"),
+						account.stale ? createElement("span", { className: "mxu_inline_stale" }, "可能过期") : null,
+					),
+					account.error ? createElement("div", { className: "mxu_inline_account_error" }, account.error) : null,
+					(account.models || []).map((model) => createElement("div", { className: "mxu_inline_model", key: model.name },
+						createElement("div", { className: "mxu_inline_model_name" }, model.name),
+						detailMetric("5 小时窗口", model.intervalRemainingPercent, model.included, formatCountdown(model.intervalEndAt)),
+						detailMetric("本周窗口", model.weeklyRemainingPercent, model.included, formatCountdown(model.weeklyEndAt)),
+					)),
+				)),
+				createElement("div", { className: "mxu_inline_hint" }, "点击立即刷新 · 仅当前 MiniMax Token Plan provider 显示"),
 			);
 		}
 
-		function BarLine(props) {
-			const tone = props.included === false ? "muted" : toneOf(props.percent);
-			const width = props.included === false ? 0 : Math.max(0, Math.min(100, props.percent ?? 0));
-			const value = props.included === false ? "未包含" : (Math.round(props.percent) + "%");
-			const reset = props.included === false ? "" : props.reset;
-			return createElement("div", { className: "mxu_bar-wrap" },
-				createElement("div", { className: "mxu_row" },
-					createElement("span", null, props.label + (reset ? " · " + reset : "")),
-					createElement("b", null, value),
-				),
-				createElement("div", { className: "mxu_bar " + tone + (props.included === false ? " dim" : "") },
-					createElement("span", { className: "mxu_bar_fill", style: { width: width + "%" } }),
-				),
+		function MiniMaxUsageIndicator(props) {
+			const directory = props.directory;
+			const directoryState = react.useSyncExternalStore(
+				(listener) => directory.subscribe(listener),
+				() => directory.getSnapshot(),
+				() => directory.getSnapshot(),
 			);
-		}
-
-		function accountTone(account) {
-			if (!account || !account.ok) return "danger";
-			if (account.stale) return "warn";
-			const primary = (account.models || []).find((m) => m.included !== false);
-			if (!primary) return "muted";
-			return toneOf(primary.intervalRemainingPercent);
-		}
-
-		function UsageBubble() {
-			const { data, busy, load, tick } = useUsage(true);
+			const current = directoryState && directoryState.current;
+			const region = directoryState && directoryState.status === "ready"
+				? minimaxRegion(current && current.provider)
+				: undefined;
+			const enabled = region !== undefined;
+			const { data, busy, load, tick } = useUsage(enabled, region);
 			void tick;
-			const [pos, setPos] = react.useState(defaultPos);
-			const [dragging, setDragging] = react.useState(false);
-			const [mounted, setMounted] = react.useState(false);
-			const [success, setSuccess] = react.useState(false);
-			const [expanded, setExpanded] = react.useState(false);
-			const drag = react.useRef(null);
-			const prevBusy = react.useRef(false);
-			const collapseTimer = react.useRef(null);
-			const hoverInside = react.useRef(false);
-			const rootRef = react.useRef(null);
-			const posRef = react.useRef(pos);
-			posRef.current = pos;
+			const [hovered, setHovered] = react.useState(false);
+			const [focused, setFocused] = react.useState(false);
+			const tooltipId = react.useId();
 
-			// Trigger the success glow when a manual refresh completes.
-			react.useEffect(() => {
-				if (prevBusy.current && !busy) {
-					setSuccess(true);
-					const timer = setTimeout(() => setSuccess(false), 950);
-					prevBusy.current = false;
-					return () => clearTimeout(timer);
-				}
-				prevBusy.current = busy;
-			}, [busy]);
+			if (!enabled) return null;
 
-			react.useEffect(() => {
-				setPos(loadPos());
-				const id = requestAnimationFrame(() => setMounted(true));
-				return () => cancelAnimationFrame(id);
-			}, []);
-
-			react.useEffect(() => {
-				const onResize = () => setPos((current) => clampPos(current, {
-					dock: current.dock,
-					margin: current.dock ? 0 : MARGIN,
-				}));
-				window.addEventListener("resize", onResize);
-				return () => window.removeEventListener("resize", onResize);
-			}, []);
-
-			react.useEffect(() => {
-				return () => {
-					if (collapseTimer.current) clearTimeout(collapseTimer.current);
-				};
-			}, []);
-
-			const clearCollapseTimer = () => {
-				if (collapseTimer.current) {
-					clearTimeout(collapseTimer.current);
-					collapseTimer.current = null;
-				}
-			};
-
-			const scheduleCollapse = () => {
-				clearCollapseTimer();
-				collapseTimer.current = setTimeout(() => {
-					collapseTimer.current = null;
-					if (!hoverInside.current && !drag.current) setExpanded(false);
-				}, COLLAPSE_MS);
-			};
-
-			const accounts = (data && data.accounts) || [];
-			const primary = pickPrimaryModel(accounts);
-			const percent = primary && primary.model ? primary.model.intervalRemainingPercent : undefined;
-			const accountError = (accounts.find((a) => a && a.error) || {}).error;
-			const isLoading = !data || data.phase === "init";
-			const failed = !isLoading && !!(data && (data.error || accountError) && !accounts.some((a) => a && a.ok));
-			const tone = isLoading ? "loading" : (failed ? "danger" : toneOf(percent));
-			const short = primary ? Math.round(percent) : (failed ? "!" : null);
-			const title = primary
-				? ("MiniMax 5h 剩余 " + formatPercent(percent) + "%")
-				: (isLoading ? "MiniMax 加载中" : (data && data.error ? data.error : (accountError || "MiniMax 未配置")));
-			const liveLabel = isLoading ? "加载中" : (failed ? "异常" : (busy ? "刷新中" : "自动刷新"));
-			const dotTone = failed ? "danger" : (busy ? "warn" : "ok");
-			const isRefreshing = busy || isLoading;
-
-			const collapsed = isDockSide(pos.dock) && !expanded && !dragging;
-			const shown = renderPos(pos, collapsed);
-			const { width: viewW, height: viewH } = viewport();
-			const panelLeft = pos.dock === "left" ? false : (pos.dock === "right" ? true : pos.left > viewW / 2);
-			const panelTop = pos.dock === "top" ? false : (pos.dock === "bottom" ? true : pos.top > viewH / 2);
-			const panelStyle = {
-				left: panelLeft ? "auto" : "0",
-				right: panelLeft ? "0" : "auto",
-				top: panelTop ? "auto" : (BUBBLE + 10) + "px",
-				bottom: panelTop ? (BUBBLE + 10) + "px" : "auto",
-				transformOrigin: (panelTop ? "bottom" : "top") + " " + (panelLeft ? "right" : "left"),
-			};
-
-			const onPointerDown = (event) => {
-				if (event.button !== 0) return;
-				event.preventDefault();
-				event.currentTarget.setPointerCapture(event.pointerId);
-				clearCollapseTimer();
-				const wasCollapsed = isDockSide(pos.dock) && !expanded && !dragging;
-				drag.current = {
-					pointerId: event.pointerId,
-					startX: event.clientX,
-					startY: event.clientY,
-					left: pos.left,
-					top: pos.top,
-					moved: false,
-					openedFromPeek: wasCollapsed,
-				};
-				setExpanded(true);
-			};
-
-			const onPointerMove = (event) => {
-				const state = drag.current;
-				if (!state || event.pointerId !== state.pointerId) return;
-				if (Math.abs(event.clientX - state.startX) > 3 || Math.abs(event.clientY - state.startY) > 3) {
-					state.moved = true;
-					setDragging(true);
-				}
-				if (!state.moved) return;
-				const next = clampPos({
-					left: state.left + (event.clientX - state.startX),
-					top: state.top + (event.clientY - state.startY),
-					dock: null,
-				}, { dock: null, margin: 0 });
-				posRef.current = next;
-				setPos(next);
-			};
-
-			const onPointerUp = (event) => {
-				const state = drag.current;
-				if (!state || event.pointerId !== state.pointerId) return;
-				drag.current = null;
-				setDragging(false);
-				const current = posRef.current;
-				const side = state.moved
-					? detectDock(current)
-					: (isDockSide(current.dock) ? current.dock : null);
-				const next = side
-					? dockedPos(current, side)
-					: clampPos(current, { dock: null, margin: MARGIN });
-				posRef.current = next;
-				savePos(next);
-				setPos(next);
-				const stillHovering = hoverInside.current;
-				if (isDockSide(next.dock)) {
-					if (state.openedFromPeek && !state.moved) {
-						setExpanded(true);
-					} else if (!stillHovering) {
-						if (finePointerHover()) scheduleCollapse();
-						else setExpanded(false);
-					}
-				} else {
-					clearCollapseTimer();
-					setExpanded(false);
-				}
-				if (!state.moved && !state.openedFromPeek) {
-					load(true);
-				}
-			};
-
-			const onMouseEnter = () => {
-				hoverInside.current = true;
-				clearCollapseTimer();
-				if (isDockSide(pos.dock)) setExpanded(true);
-			};
-
-			const onMouseLeave = () => {
-				hoverInside.current = false;
-				if (drag.current) return;
-				if (isDockSide(pos.dock)) scheduleCollapse();
-			};
-
-			react.useEffect(() => {
-				if (finePointerHover()) return undefined;
-				const onDocPointerDown = (event) => {
-					if (!isDockSide(pos.dock) || dragging) return;
-					const root = rootRef.current;
-					if (root && root.contains(event.target)) return;
-					hoverInside.current = false;
-					setExpanded(false);
-				};
-				document.addEventListener("pointerdown", onDocPointerDown);
-				return () => document.removeEventListener("pointerdown", onDocPointerDown);
-			}, [pos.dock, dragging]);
-
-			const core = busy
-				? createElement("span", { className: "mxu_spin", key: "spin" })
-				: isLoading && !primary
-					? createElement("span", { className: "mxu_spin", key: "spin" })
-					: failed
-						? createElement("span", { className: "mxu_pct_err", key: "err" }, "!")
-						: short !== null && short !== undefined
-							? createElement("span", { className: "mxu_pct", key: "pct" },
-								short,
-								createElement("em", null, "%"),
-							)
-							: createElement("span", { className: "mxu_pct mxu_pct_dash", key: "dash" }, "—");
-
-			const wrapper = createElement("div", {
-				className: "mxu_float" + (mounted ? "" : " mxu_pre"),
-				ref: rootRef,
-				"data-dragging": dragging ? "true" : undefined,
-				"data-collapsed": collapsed ? "true" : undefined,
-				"data-dock": isDockSide(pos.dock) ? pos.dock : undefined,
-				style: { left: shown.left + "px", top: shown.top + "px" },
-				onMouseEnter,
-				onMouseLeave,
+			const accounts = data && Array.isArray(data.accounts) ? data.accounts : [];
+			const selected = accountForSelection(accounts, region, current && current.model);
+			const account = selected.account;
+			const model = selected.model;
+			const loading = !data || data.phase === "init";
+			const error = (account && account.error) || (data && data.error);
+			const summary = loading
+				? "MiniMax Token Plan 用量读取中"
+				: error && !model
+					? "MiniMax Token Plan 用量异常：" + error
+					: "MiniMax " + (REGION_LABEL[region] || "") + "：5h 剩余 " + formatPercent(model && model.intervalRemainingPercent) + "，7d 剩余 " + formatPercent(model && model.weeklyRemainingPercent) + "；点击刷新";
+			const showTooltip = hovered || focused;
+			return createElement("span", {
+				className: "mxu_inline_host",
+				"data-minimax-usage": "true",
+				"data-minimax-usage-provider": current && current.provider,
+				"data-minimax-usage-region": region,
+				onMouseEnter: () => setHovered(true),
+				onMouseLeave: () => setHovered(false),
 			},
 				createElement("button", {
 					type: "button",
-					className: "mxu_bubble " + tone,
-					title: title + " · 悬停看详情 · 拖到边缘可收起 · 点击刷新",
-					"aria-label": title,
+					className: "mxu_inline",
+					"aria-label": summary,
+					"aria-busy": busy || loading ? "true" : "false",
+					"aria-describedby": showTooltip ? tooltipId : undefined,
+					title: summary,
 					"data-busy": busy ? "true" : undefined,
-					"data-success": success ? "true" : undefined,
-					onPointerDown,
-					onPointerMove,
-					onPointerUp,
-					onPointerCancel: onPointerUp,
+					onClick: () => { void load(true); },
+					onFocus: () => setFocused(true),
+					onBlur: () => setFocused(false),
 				},
-					createElement(Ring, { percent: failed ? 0 : percent }),
-					createElement("span", { className: "mxu_core" },
-						core,
-						createElement("span", { className: "mxu_tag" }, "5h"),
+					createElement("span", { className: "mxu_inline_rows" },
+						createElement(CompactQuotaLine, {
+							label: "5h",
+							percent: model && model.intervalRemainingPercent,
+							included: model && model.included,
+							loading,
+						}),
+						createElement(CompactQuotaLine, {
+							label: "7d",
+							percent: model && model.weeklyRemainingPercent,
+							included: model && model.included,
+							loading,
+						}),
 					),
 				),
-				createElement("div", { className: "mxu_panel", style: panelStyle },
-					createElement("div", { className: "mxu_panel_refresh" + (busy ? " busy" : ""), "aria-hidden": "true" }),
-					createElement("div", { className: "mxu_head" },
-						createElement("div", { className: "mxu_brand" },
-							createElement("span", { className: "mxu_logo", "aria-hidden": "true" }, "M"),
-							createElement("div", null,
-								createElement("div", { className: "mxu_title" }, "MiniMax"),
-								createElement("div", { className: "mxu_sub" }, "Token Plan 用量"),
-							),
-						),
-						createElement("span", { className: "mxu_live" + (busy ? " refreshing" : "") },
-							createElement("span", { className: "mxu_dot " + dotTone }),
-							liveLabel + (data && data.fetchedAt && !busy && !isLoading ? " · " + formatFetchedAt(data.fetchedAt) : ""),
-							busy ? createElement("span", { className: "mxu_inline_spin", "aria-hidden": "true" }) : null,
-						),
-					),
-					data && data.error ? createElement("div", { className: "mxu_err" }, data.error) : null,
-					accounts.length === 0 && !(data && data.error)
-						? createElement("div", { className: "mxu_empty" + (busy ? " refreshing" : "") },
-							(isLoading || busy) ? createElement("span", { className: "mxu_spin" }) : null,
-							createElement("div", null,
-								busy ? "正在刷新用量…"
-								: isLoading ? "正在拉取用量…"
-								: "暂无可用账号"
-							),
-						)
-						: null,
-					accounts.map((account) => createElement("div", {
-					className: "mxu_acc " + accountTone(account),
-					key: account.region,
-				},
-						createElement("div", { className: "mxu_acc_head" },
-							createElement("span", { className: "mxu_chip" }, REGION_LABEL[account.region] || account.region),
-							createElement("span", { className: "mxu_acc_name" },
-								account.planName || "订阅套餐",
-								account.stale ? createElement("span", { className: "mxu_stale" }, "可能过期") : null,
-							),
-						),
-						account.error ? createElement("div", { className: "mxu_err" }, account.error) : null,
-						(account.models || []).map((model) => createElement("div", { className: "mxu_model", key: model.name },
-							createElement("div", { className: "mxu_model_name" }, model.name),
-							createElement(BarLine, {
-								label: "5 小时窗口",
-								percent: model.intervalRemainingPercent,
-								reset: formatCountdown(model.intervalEndAt),
-								included: model.included,
-							}),
-							createElement(BarLine, {
-								label: "本周窗口",
-								percent: model.weeklyRemainingPercent,
-								reset: formatCountdown(model.weeklyEndAt),
-								included: model.included,
-							}),
-						)),
-					)),
-					accounts.length > 0 ? createElement("div", { className: "mxu_hint" }, "整轮空闲 15 秒后更新 · 心跳 2 分钟起翻倍 · 点击立即刷新") : null,
-				),
+				showTooltip ? createElement(DetailPanel, {
+					id: tooltipId,
+					data,
+					accounts,
+					busy,
+					region,
+				}) : null,
 			);
-		return createPortal(wrapper, document.body);
 		}
 
 		function apply(ctx) {
-			ctx.slots.inject("shell.overlay", () => ctx.slots.register({
-				name: "shell.overlay",
-				id: "minimax-usage",
-				order: 40,
-				label: "MiniMax",
-			}, UsageBubble));
+			if (!ctx || typeof ctx.inject !== "function") return;
+			ctx.inject(["slots", "modelDirectories"], (scope) => {
+				if (!scope || !scope.slots || !scope.modelDirectories) return;
+				scope.slots.inject("conversation.input.right", () => scope.slots.register({
+					name: "conversation.input.right",
+					id: "minimax-usage",
+					order: 30,
+					label: "MiniMax",
+					inject: (sessionId) => ({
+						directory: scope.modelDirectories.directoryFor(sessionId).store,
+					}),
+				}, MiniMaxUsageIndicator));
+			});
 		}
 
 		exports.apply = apply;

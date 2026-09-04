@@ -3,10 +3,10 @@
 在 DeepSeek Harness (DSH) Web UI 中显示 MiniMax Token Plan 订阅用量。
 
 插件读取官方 [Token Plan 用量接口](https://platform.minimax.io/docs/token-plan/faq)
-`GET /v1/token_plan/remains`，在 Web UI 右下角放一个可拖动的用量气泡。
+`GET /v1/token_plan/remains`，在对话框模型选择器旁显示紧凑的 5h / 7d 用量条。
 密钥复用 DSH **设置 → 模型** 里已配置的订阅 Key，浏览器拿不到明文。
 
-![dsh-minimax-usage 悬浮气泡](assets/minimax.png)
+![dsh-minimax-usage 模型选择器旁的用量条](assets/minimax.png)
 
 ## 安装
 
@@ -47,16 +47,16 @@ allowBuilds:
 
 1. 打开 Web UI（默认 `http://127.0.0.1:3080`）
 2. **设置 → 模型** 填写 Token Plan **订阅 Key**（不是普通按量付费 API Key）
-3. 右下角会出现 MiniMax 气泡；悬停看详情，拖动换位置
+3. 在对话框中选择 MiniMax Token Plan 模型后，模型选择器左侧会出现用量条；悬停看详情，点击用量条刷新
 
 ## 功能
 
-- **悬浮气泡**：默认在右下角，显示 5 小时窗口剩余百分比；可拖到任意位置，位置会记住
-- **贴边收起**：拖到屏幕边缘松手后会滑出屏幕，只留一小截标志；鼠标放上去（触控点一下）再滑回来，拖回中间即取消停靠
-- **悬停卡片**：鼠标放上去看国内站 / 国际站、套餐名、5h / 周进度条和重置倒计时
-- **点击刷新**：点一下气泡强制刷新；拖动不会误触发刷新
+- **内联用量条**：显示在对话框模型选择器左侧，按截图样式显示 5h / 7d 两条剩余进度
+- **按 provider 显示**：只有当前选择 `minimax-cn` 或 `minimax` Token Plan provider 时显示；其他 provider 即使模型名含 MiniMax 也隐藏
+- **悬停详情**：鼠标悬停或键盘聚焦可查看国内站 / 国际站、套餐名、窗口进度和重置倒计时
+- **点击刷新**：点一下用量条强制刷新，不改变模型选择或发送操作
 - **密钥来源**：`MINIMAX_API_KEY`（国际）与 `MINIMAX_CN_API_KEY`（国内），优先 `ctx.credentials`，其次进程环境变量
-- **自动刷新**：整轮 Agent 回到空闲且这轮用过 MiniMax 后，再等 15 秒打官方用量。之后心跳从 2 分钟起每次翻倍，上限 24 小时；再用 MiniMax 并空闲后心跳重置回 2 分钟。每轮快照还会按 5 小时窗口的重置时刻 + 30 秒再触发一次"重置后刷新"，第一时间拉取翻页后的额度。气泡每 15 秒只读 Host 缓存。点击立即强制刷新。
+- **自动刷新**：整轮 Agent 回到空闲且这轮用过 MiniMax 后，再等 15 秒打官方用量。之后心跳从 2 分钟起每次翻倍，上限 24 小时；再用 MiniMax 并空闲后心跳重置回 2 分钟。每轮快照还会按 5 小时窗口的重置时刻 + 30 秒再触发一次"重置后刷新"，第一时间拉取翻页后的额度。用量条每 15 秒只读 Host 缓存。点击立即强制刷新。
 
 ## 接口
 
@@ -65,7 +65,7 @@ allowBuilds:
 | 国际 | `MINIMAX_API_KEY` | `www.minimax.io`，失败则回退 `api.minimax.io` |
 | 国内 | `MINIMAX_CN_API_KEY` | `api.minimaxi.com`，失败则回退 `www.minimaxi.com` |
 
-只查询已配置的区域。两把 Key 都有就并排两张卡。
+只查询已配置的区域。两把 Key 都有时，悬停详情中会并排展示两张账号卡。
 
 ## 注意
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-minimax-usage",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Show MiniMax Token Plan subscription usage in the DSH Web UI",
   "type": "module",
   "files": [
@@ -43,7 +43,8 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
-        "@deepseek-ai/dsh-client-ui-settings"
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-model-selection"
       ]
     },
     "bundle": {
