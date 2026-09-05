@@ -38,22 +38,33 @@ export function apply(ctx: unknown): () => void {
 
   if (typeof context.on === "function") {
     context.on("llm/stream", (options, next) => {
-      const provider =
+      const optionsObject =
         options !== null && typeof options === "object"
-          ? (options as { provider?: unknown }).provider
+          ? (options as { provider?: unknown; sessionId?: unknown; purpose?: unknown })
           : undefined;
+      const provider = optionsObject?.provider;
+      const sessionId =
+        typeof optionsObject?.sessionId === "string" ? optionsObject.sessionId : undefined;
       const region = regionOfProvider(provider);
-      if (region !== undefined) scheduler.markDirty(region);
+      const auxiliary =
+        optionsObject?.purpose === "compaction" || optionsObject?.purpose === "session-title";
+      if (auxiliary) {
+        if (region !== undefined) scheduler.markDirty(region);
+      } else {
+        scheduler.observeProvider(region, sessionId);
+      }
       const nxt = next as () => unknown;
       return nxt();
     });
     context.on("agent/status", (payload) => {
-      const status =
+      const payloadObject =
         payload !== null && typeof payload === "object"
-          ? (payload as { status?: unknown }).status
+          ? (payload as { status?: unknown; agent?: { id?: unknown } })
           : undefined;
-      if (status === "running") scheduler.onRunning();
-      else if (status === "idle") scheduler.onIdle();
+      const status = payloadObject?.status;
+      const agentId = typeof payloadObject?.agent?.id === "string" ? payloadObject.agent.id : undefined;
+      if (status === "running") scheduler.onRunning(agentId);
+      else if (status === "idle") scheduler.onIdle(agentId);
     });
     context.on("credentials/reference-updated", (ref) => {
       if (ref !== GLOBAL_KEY_REF && ref !== CN_KEY_REF) return;

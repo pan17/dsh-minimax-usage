@@ -31,7 +31,8 @@ export type RefreshReason =
   | "heartbeat"
   | "credential"
   | "manual"
-  | "interval-reset";
+  | "interval-reset"
+  | "running";
 
 /** Browser-facing usage payload. Never contains secrets or Host objects. */
 export interface UsageSnapshot {

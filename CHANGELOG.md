@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-05
+
+### Changed
+
+- 仅在实际运行中的 Agent 使用 MiniMax Token Plan provider 时，每 30 秒强制刷新一次用量；切换 provider 或进入空闲后停止该循环。
+
 ## [0.1.7] - 2026-09-04
 
 ### Changed

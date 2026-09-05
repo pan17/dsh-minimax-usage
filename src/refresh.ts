@@ -1,6 +1,7 @@
 import type { Region, RefreshReason, UsageSnapshot } from "./types.js";
 
 export const IDLE_DELAY_MS = 15_000;
+export const RUNNING_REFRESH_INTERVAL_MS = 30_000;
 export const HEARTBEAT_MIN_MS = 2 * 60 * 1000;
 export const HEARTBEAT_MAX_MS = 24 * 60 * 60 * 1000;
 /** Fixed offset past the 5h-window reset time at which we re-fetch. */
@@ -58,10 +59,15 @@ export function computeResetFireAt(
   return fireAt > now ? fireAt : undefined;
 }
 
+const DEFAULT_AGENT_KEY = "__default__";
+
 export class RefreshScheduler {
   private readonly dirty = new Set<Region>();
+  private readonly runningAgents = new Set<string>();
+  private readonly minimaxRunningAgents = new Set<string>();
   private idleCancel: (() => void) | undefined;
   private heartbeatCancel: (() => void) | undefined;
+  private runningCancel: (() => void) | undefined;
   private resetCancel: (() => void) | undefined;
   private resetFireAt: number | undefined;
   private prefetching = false;
@@ -78,15 +84,62 @@ export class RefreshScheduler {
     this.dirty.add(region);
   }
 
+  private resolveAgentKey(agentId?: string): string {
+    if (agentId !== undefined) return agentId;
+    if (this.runningAgents.has(DEFAULT_AGENT_KEY)) return DEFAULT_AGENT_KEY;
+    if (this.runningAgents.size === 1) {
+      for (const key of this.runningAgents) return key;
+    }
+    return DEFAULT_AGENT_KEY;
+  }
+
+  /**
+   * Observe the provider used by one LLM request. MiniMax requests make that
+   * running agent eligible for the 30-second refresh loop; another provider
+   * removes the eligibility without discarding the dirty region used by the
+   * existing idle refresh path.
+   */
+  observeProvider(region: Region | undefined, agentId?: string): void {
+    const key = this.resolveAgentKey(agentId);
+    if (region === undefined) {
+      this.minimaxRunningAgents.delete(key);
+      this.syncRunningRefresh();
+      return;
+    }
+
+    this.markDirty(region);
+    if (this.runningAgents.has(key)) {
+      this.minimaxRunningAgents.add(key);
+      this.syncRunningRefresh();
+    }
+  }
+
   get dirtyRegions(): Region[] {
     return [...this.dirty];
   }
 
-  onRunning(): void {
+  onRunning(agentId?: string): void {
+    const key = agentId ?? DEFAULT_AGENT_KEY;
+    if (this.runningAgents.has(key)) return;
+
+    const wasRunning = this.runningAgents.size > 0;
+    this.runningAgents.add(key);
+    this.minimaxRunningAgents.delete(key);
     this.clearIdleTimer();
+    if (!wasRunning) this.clearHeartbeat();
+    this.syncRunningRefresh();
   }
 
-  onIdle(): void {
+  onIdle(agentId?: string): void {
+    const key = agentId ?? DEFAULT_AGENT_KEY;
+    this.runningAgents.delete(key);
+    this.minimaxRunningAgents.delete(key);
+    this.syncRunningRefresh();
+
+    // Another Agent is still running, so do not arm a global idle refresh.
+    if (this.runningAgents.size > 0) return;
+
+    this.armHeartbeat();
     if (this.dirty.size === 0) return;
     this.clearIdleTimer();
     this.idleCancel = this.clock.timeout(() => {
@@ -103,7 +156,10 @@ export class RefreshScheduler {
   dispose(): void {
     this.clearIdleTimer();
     this.clearHeartbeat();
+    this.clearRunningRefresh();
     this.clearResetRefresh();
+    this.runningAgents.clear();
+    this.minimaxRunningAgents.clear();
     this.dirty.clear();
   }
 
@@ -118,12 +174,45 @@ export class RefreshScheduler {
       this.armResetRefresh(snap);
     } finally {
       this.prefetching = false;
-      this.armHeartbeat();
+      this.syncBackgroundRefresh();
     }
+  }
+
+  private hasEligibleRunningAgent(): boolean {
+    for (const key of this.minimaxRunningAgents) {
+      if (this.runningAgents.has(key)) return true;
+    }
+    return false;
+  }
+
+  private syncRunningRefresh(): void {
+    if (!this.hasEligibleRunningAgent()) {
+      this.clearRunningRefresh();
+      return;
+    }
+    if (this.runningCancel === undefined && !this.prefetching) this.armRunningRefresh();
+  }
+
+  private syncBackgroundRefresh(): void {
+    if (this.hasEligibleRunningAgent()) {
+      this.syncRunningRefresh();
+      return;
+    }
+    if (this.runningAgents.size === 0) this.armHeartbeat();
+  }
+
+  private armRunningRefresh(): void {
+    this.clearRunningRefresh();
+    if (!this.hasEligibleRunningAgent()) return;
+    this.runningCancel = this.clock.timeout(() => {
+      this.runningCancel = undefined;
+      void this.prefetch("running", false);
+    }, RUNNING_REFRESH_INTERVAL_MS);
   }
 
   private armHeartbeat(): void {
     this.clearHeartbeat();
+    if (this.runningAgents.size > 0) return;
     this.heartbeatCancel = this.clock.timeout(() => {
       this.heartbeatCancel = undefined;
       if (this.idleCancel !== undefined) {
@@ -171,6 +260,11 @@ export class RefreshScheduler {
   private clearHeartbeat(): void {
     this.heartbeatCancel?.();
     this.heartbeatCancel = undefined;
+  }
+
+  private clearRunningRefresh(): void {
+    this.runningCancel?.();
+    this.runningCancel = undefined;
   }
 
   private clearResetRefresh(): void {

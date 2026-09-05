@@ -3,6 +3,7 @@ import {
   HEARTBEAT_MAX_MS,
   HEARTBEAT_MIN_MS,
   IDLE_DELAY_MS,
+  RUNNING_REFRESH_INTERVAL_MS,
   RESET_REFRESH_DELAY_MS,
   computeResetFireAt,
   nextHeartbeatMs,
@@ -111,6 +112,105 @@ describe("RefreshScheduler", () => {
     scheduler.onRunning();
     await clock.advance(IDLE_DELAY_MS + 50);
     expect(reasons).toEqual([]);
+    scheduler.dispose();
+  });
+
+  it("refreshes every 30 seconds only after a running MiniMax request", async () => {
+    const reasons: RefreshReason[] = [];
+    const clock = new FakeClock();
+    const scheduler = new RefreshScheduler({
+      snapshot: async (_force, reason) => {
+        reasons.push(reason);
+      },
+    }, clock);
+
+    scheduler.onRunning();
+    await clock.advance(HEARTBEAT_MIN_MS);
+    expect(reasons).toEqual([]);
+
+    scheduler.observeProvider("global");
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS - 1);
+    expect(reasons).toEqual([]);
+    await clock.advance(1);
+    expect(reasons).toEqual(["running"]);
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS * 2);
+    expect(reasons).toEqual(["running", "running", "running"]);
+    scheduler.dispose();
+  });
+
+  it("associates a provider without sessionId when one Agent is running", async () => {
+    const reasons: RefreshReason[] = [];
+    const clock = new FakeClock();
+    const scheduler = new RefreshScheduler({
+      snapshot: async (_force, reason) => {
+        reasons.push(reason);
+      },
+    }, clock);
+
+    scheduler.onRunning("agent-1");
+    scheduler.observeProvider("global");
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS);
+    expect(reasons).toEqual(["running"]);
+    scheduler.dispose();
+  });
+
+  it("keeps another Agent's MiniMax refresh alive when a second Agent is non-MiniMax", async () => {
+    const reasons: RefreshReason[] = [];
+    const clock = new FakeClock();
+    const scheduler = new RefreshScheduler({
+      snapshot: async (_force, reason) => {
+        reasons.push(reason);
+      },
+    }, clock);
+
+    scheduler.onRunning("minimax-agent");
+    scheduler.onRunning("other-agent");
+    scheduler.observeProvider("cn", "minimax-agent");
+    scheduler.observeProvider(undefined, "other-agent");
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS);
+    expect(reasons).toEqual(["running"]);
+    scheduler.dispose();
+  });
+
+  it("stops the running refresh when the provider changes away from MiniMax", async () => {
+    const reasons: RefreshReason[] = [];
+    const clock = new FakeClock();
+    const scheduler = new RefreshScheduler({
+      snapshot: async (_force, reason) => {
+        reasons.push(reason);
+      },
+    }, clock);
+
+    scheduler.onRunning();
+    scheduler.observeProvider("cn");
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS);
+    expect(reasons).toEqual(["running"]);
+
+    scheduler.observeProvider(undefined);
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS * 2);
+    expect(reasons).toEqual(["running"]);
+    scheduler.dispose();
+  });
+
+  it("cancels running refresh on idle and keeps the existing idle prefetch", async () => {
+    const reasons: RefreshReason[] = [];
+    const clock = new FakeClock();
+    const scheduler = new RefreshScheduler({
+      snapshot: async (_force, reason) => {
+        reasons.push(reason);
+      },
+    }, clock);
+
+    scheduler.onRunning();
+    scheduler.observeProvider("global");
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS);
+    expect(reasons).toEqual(["running"]);
+
+    scheduler.onIdle();
+    await clock.advance(IDLE_DELAY_MS);
+    expect(reasons).toEqual(["running", "turn-idle"]);
+    await clock.advance(RUNNING_REFRESH_INTERVAL_MS * 2);
+    expect(reasons).toEqual(["running", "turn-idle"]);
     scheduler.dispose();
   });
 
